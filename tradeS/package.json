@@ -1,0 +1,47 @@
+{
+  "name": "trades",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3100",
+    "build": "next build",
+    "start": "next start -p 3100",
+    "lint": "eslint",
+    "worker": "tsx watch worker/index.ts",
+    "dev:all": "concurrently -n web,worker \"npm:dev\" \"npm:worker\"",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx scripts/migrate.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "next": "16.2.10",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "@anthropic-ai/claude-agent-sdk": "^0.3.199",
+    "better-sqlite3": "^12.11.1",
+    "drizzle-orm": "^0.45.2",
+    "yahoo-finance2": "^3.15.4",
+    "lightweight-charts": "^5.2.0",
+    "ws": "^8.21.0",
+    "node-cron": "^4.5.0",
+    "zod": "^4.4.3",
+    "dotenv": "^17.4.2"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.31.10",
+    "tsx": "^4.23.0",
+    "vitest": "^4.1.9",
+    "typescript": "^5",
+    "tailwindcss": "^4",
+    "@tailwindcss/postcss": "^4",
+    "concurrently": "^10.0.3",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.10",
+    "@eslint/eslintrc": "^3",
+    "@types/node": "^22",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@types/ws": "^8.18.1",
+    "@types/better-sqlite3": "^7.6.13"
+  }
+}

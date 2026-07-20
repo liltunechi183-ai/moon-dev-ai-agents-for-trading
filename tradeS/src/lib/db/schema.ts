@@ -13,7 +13,7 @@
 // (approve/dismiss), and user-role chat_messages.
 //
 // Phases so far: 1 (dashboard/live data), 2 (predictions & accuracy),
-// 3 (paper trading). Later phases append more tables here.
+// 3 (paper trading), 4 (bot). Later phases append more tables here.
 
 import { sqliteTable, text, integer, real, index, primaryKey } from "drizzle-orm/sqlite-core";
 import type { IndicatorSnapshot } from "@/lib/quant/types";
@@ -178,6 +178,70 @@ export const accountSnapshots = sqliteTable("account_snapshots", {
   equity: real("equity").notNull(),
   cash: real("cash").notNull(),
   buyingPower: real("buying_power").notNull(),
+});
+
+// ---------------------------------------------------------------------------
+// Bot (Phase 4).
+// ---------------------------------------------------------------------------
+
+export const botConfig = sqliteTable("bot_config", {
+  key: text("key").primaryKey(),
+  value: text("value", { mode: "json" }).notNull(),
+});
+
+export const botRules = sqliteTable("bot_rules", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+  condition: text("condition", { mode: "json" }).notNull(),
+  action: text("action", { mode: "json" }).notNull(),
+  version: integer("version").notNull().default(1), // bumped on every edit
+  createdAt: integer("created_at").notNull(),
+});
+
+/** Append-only history so a trade is judged against the rule AT FIRE TIME. */
+export const botRuleVersions = sqliteTable("bot_rule_versions", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  ruleId: integer("rule_id").notNull(),
+  version: integer("version").notNull(),
+  name: text("name").notNull(),
+  condition: text("condition", { mode: "json" }).notNull(),
+  action: text("action", { mode: "json" }).notNull(),
+  createdAt: integer("created_at").notNull(),
+});
+
+/** DERIVED realized round trips — rebuilt from orders_log + bot_activity. */
+export const botTrades = sqliteTable("bot_trades", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  symbol: text("symbol").notNull(),
+  ruleId: integer("rule_id"),
+  ruleVersion: integer("rule_version"),
+  exitRuleId: integer("exit_rule_id"),
+  qty: real("qty").notNull(),
+  entryOrderId: text("entry_order_id").notNull(),
+  exitOrderId: text("exit_order_id").notNull(),
+  entryAt: integer("entry_at").notNull(),
+  exitAt: integer("exit_at").notNull(),
+  entryPrice: real("entry_price").notNull(),
+  exitPrice: real("exit_price").notNull(),
+  pnlUsd: real("pnl_usd").notNull(),
+  pnlPct: real("pnl_pct").notNull(),
+  exitKind: text("exit_kind", {
+    enum: ["stop-loss", "take-profit", "sell-rule", "other"],
+  }).notNull(),
+});
+
+/** Full audit trail including blocked decisions and halts. */
+export const botActivity = sqliteTable("bot_activity", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  ts: integer("ts").notNull(),
+  ruleId: integer("rule_id"),
+  ruleVersion: integer("rule_version"),
+  symbol: text("symbol"),
+  decision: text("decision", { enum: ["buy", "sell", "skip", "blocked", "halt"] }).notNull(),
+  reason: text("reason").notNull(),
+  orderId: text("order_id"),
+  snapshot: text("snapshot", { mode: "json" }),
 });
 
 export const jobs = sqliteTable(

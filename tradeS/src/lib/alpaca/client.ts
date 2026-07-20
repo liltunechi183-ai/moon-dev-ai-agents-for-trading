@@ -80,8 +80,12 @@ export const alpaca = {
   getAccount: () => trading<AlpacaAccount>("/v2/account"),
 
   getPositions: () => trading<unknown[]>("/v2/positions"),
-  closePosition: (symbol: string) =>
-    trading<AlpacaOrder>(`/v2/positions/${toAlpacaSymbol(symbol)}`, { method: "DELETE" }),
+  /** cancelOrders=true also cancels open orders (bracket legs) on the symbol. */
+  closePosition: (symbol: string, cancelOrders = false) =>
+    trading<AlpacaOrder>(
+      `/v2/positions/${toAlpacaSymbol(symbol)}${cancelOrders ? "?cancel_orders=true" : ""}`,
+      { method: "DELETE" },
+    ),
 
   listOrders: (params: Record<string, string> = {}) => {
     const qs = new URLSearchParams(params).toString();

@@ -10,6 +10,7 @@ async function main() {
   const { startSignalRunner } = await import("./signal-runner");
   const { startResearchRunner } = await import("./research-runner");
   const { startOutcomeRunner } = await import("./outcome-runner");
+  const { startOrderSync } = await import("./order-sync");
 
   console.log(
     `[worker] booting — paper=${env.paper} hasAlpacaKeys=${env.hasAlpacaKeys} db=${env.databasePath}`,
@@ -20,6 +21,7 @@ async function main() {
   startSignalRunner();
   startResearchRunner();
   startOutcomeRunner();
+  startOrderSync();
 
   console.log("[worker] all runners started");
 }

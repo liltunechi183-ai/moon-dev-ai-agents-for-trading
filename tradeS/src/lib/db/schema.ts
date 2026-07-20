@@ -12,8 +12,8 @@
 // rule_suggestions status transitions, discoveries status transitions
 // (approve/dismiss), and user-role chat_messages.
 //
-// Phases so far: 1 (dashboard/live data), 2 (predictions & accuracy).
-// Later phases append more tables here.
+// Phases so far: 1 (dashboard/live data), 2 (predictions & accuracy),
+// 3 (paper trading). Later phases append more tables here.
 
 import { sqliteTable, text, integer, real, index, primaryKey } from "drizzle-orm/sqlite-core";
 import type { IndicatorSnapshot } from "@/lib/quant/types";
@@ -146,6 +146,38 @@ export const strategyVersions = sqliteTable("strategy_versions", {
   createdAt: integer("created_at").notNull(),
   activatedAt: integer("activated_at"),
   retiredAt: integer("retired_at"),
+});
+
+// ---------------------------------------------------------------------------
+// Trading (Phase 3). orders_log records every order this app submitted or
+// saw on the trade stream — bracket legs are SEPARATE Alpaca orders, so the
+// stream handler must UPSERT (an unknown order id is a leg fill, not noise).
+// ---------------------------------------------------------------------------
+
+export const ordersLog = sqliteTable("orders_log", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  alpacaOrderId: text("alpaca_order_id").notNull().unique(),
+  parentOrderId: text("parent_order_id"), // bracket parent's alpaca order id
+  symbol: text("symbol").notNull(),
+  side: text("side", { enum: ["buy", "sell"] }).notNull(),
+  type: text("type").notNull(),
+  qty: real("qty"),
+  notional: real("notional"),
+  limitPrice: real("limit_price"),
+  status: text("status").notNull(),
+  source: text("source", { enum: ["manual", "bot"] }).notNull(),
+  submittedAt: integer("submitted_at").notNull(),
+  filledAt: integer("filled_at"),
+  filledAvgPrice: real("filled_avg_price"),
+  raw: text("raw", { mode: "json" }),
+});
+
+/** The equity curve. One row per snapshot; ts is the primary key. */
+export const accountSnapshots = sqliteTable("account_snapshots", {
+  ts: integer("ts").primaryKey(),
+  equity: real("equity").notNull(),
+  cash: real("cash").notNull(),
+  buyingPower: real("buying_power").notNull(),
 });
 
 export const jobs = sqliteTable(

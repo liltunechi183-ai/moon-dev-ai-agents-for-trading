@@ -8,6 +8,8 @@ async function main() {
   const { startPriceStream } = await import("./price-stream");
   const { startYahooPoller } = await import("./yahoo-poller");
   const { startSignalRunner } = await import("./signal-runner");
+  const { startResearchRunner } = await import("./research-runner");
+  const { startOutcomeRunner } = await import("./outcome-runner");
 
   console.log(
     `[worker] booting — paper=${env.paper} hasAlpacaKeys=${env.hasAlpacaKeys} db=${env.databasePath}`,
@@ -16,6 +18,8 @@ async function main() {
   startPriceStream();
   startYahooPoller();
   startSignalRunner();
+  startResearchRunner();
+  startOutcomeRunner();
 
   console.log("[worker] all runners started");
 }

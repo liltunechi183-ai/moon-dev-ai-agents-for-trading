@@ -7,3 +7,7 @@ data/
 .env.local
 next-env.d.ts
 *.tsbuildinfo
+
+# The repo-root .gitignore (Python project) ignores `lib/`, which would
+# silently swallow tradeS/src/lib. Re-include it here.
+!lib/

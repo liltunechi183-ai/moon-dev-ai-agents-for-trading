@@ -4,6 +4,7 @@ import { use, useEffect, useState } from "react";
 import { useQuoteStream } from "@/hooks/useQuoteStream";
 import { CandlestickChart } from "@/components/CandlestickChart";
 import { SignalsStrip } from "@/components/SignalsStrip";
+import { PredictionSection } from "@/components/PredictionSection";
 import type { Bar } from "@/lib/quant/types";
 import type { IndicatorSnapshot } from "@/lib/quant/types";
 import type { Pattern } from "@/lib/quant/patterns";
@@ -75,6 +76,8 @@ export default function StockPage({ params }: { params: Promise<{ symbol: string
       )}
 
       {signals && <SignalsStrip indicators={signals.indicators} patterns={signals.patterns} />}
+
+      <PredictionSection symbol={symbol} />
     </div>
   );
 }

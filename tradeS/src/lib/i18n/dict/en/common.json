@@ -1,0 +1,20 @@
+{
+  "nav.dashboard": "Dashboard",
+  "nav.predictions": "Predictions",
+  "nav.discoveries": "Discoveries",
+  "nav.trade": "Trade",
+  "nav.bot": "Bot",
+  "nav.strategy": "Strategy",
+  "nav.howto": "How-to",
+  "common.loading": "Loading…",
+  "common.notAdvice": "Decision-support research only. Not financial advice.",
+  "common.save": "Save",
+  "common.cancel": "Cancel",
+  "common.delete": "Delete",
+  "common.remove": "Remove",
+  "common.add": "Add",
+  "common.close": "Close",
+  "common.marketOpen": "Market open",
+  "common.marketClosed": "Market closed",
+  "common.delayed": "delayed"
+}

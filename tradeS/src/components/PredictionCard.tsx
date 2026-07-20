@@ -56,10 +56,17 @@ export function PredictionCard({ item, onRefresh }: { item: PredictionListItem; 
           {symbol}
         </Link>
         {prediction && prediction.status === "ok" && (
-          <span
-            className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${OUTLOOK_STYLES[prediction.outlook]}`}
-          >
-            {prediction.outlook} · {prediction.horizonDays}d
+          <span className="flex items-center gap-1.5">
+            {prediction.revisedFromId != null && (
+              <span className="rounded-full border border-[#38bdf8]/30 bg-[#38bdf8]/10 px-2 py-0.5 text-[10px] text-[#38bdf8]">
+                Revised
+              </span>
+            )}
+            <span
+              className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${OUTLOOK_STYLES[prediction.outlook]}`}
+            >
+              {prediction.outlook} · {prediction.horizonDays}d
+            </span>
           </span>
         )}
         {prediction && prediction.status === "error" && (

@@ -244,6 +244,61 @@ export const botActivity = sqliteTable("bot_activity", {
   snapshot: text("snapshot", { mode: "json" }),
 });
 
+// ---------------------------------------------------------------------------
+// Phase 5: point-in-time sims, challenge chat, translations.
+// ---------------------------------------------------------------------------
+
+/** Point-in-time sims graded immediately (quant-only, zero news — one
+ * leaked future headline poisons the whole backtest). */
+export const backtests = sqliteTable(
+  "backtests",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    symbol: text("symbol").notNull(),
+    asOf: integer("as_of").notNull(),
+    outlook: text("outlook", { enum: ["bullish", "neutral", "bearish"] }).notNull(),
+    confidence: integer("confidence").notNull(),
+    horizonDays: integer("horizon_days").notNull(),
+    thesis: text("thesis").notNull(),
+    quantSnapshot: text("quant_snapshot", { mode: "json" }).$type<{
+      indicators: IndicatorSnapshot;
+      patterns: Pattern[];
+    }>(),
+    priceAtAsOf: real("price_at_as_of").notNull(),
+    priceAtHorizon: real("price_at_horizon").notNull(),
+    returnPct: real("return_pct").notNull(),
+    directionCorrect: integer("direction_correct", { mode: "boolean" }).notNull(),
+    createdAt: integer("created_at").notNull(),
+    algoVersion: integer("algo_version"),
+    model: text("model"),
+    regime: text("regime"),
+    maxDrawdownPct: real("max_drawdown_pct"),
+    maxGainPct: real("max_gain_pct"),
+    neutralBandPct: real("neutral_band_pct"),
+    benchmarkReturnPct: real("benchmark_return_pct"),
+  },
+  (t) => [index("backtests_symbol_asof_idx").on(t.symbol, t.asOf)],
+);
+
+export const chatMessages = sqliteTable("chat_messages", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  predictionId: integer("prediction_id").notNull(),
+  role: text("role", { enum: ["user", "assistant"] }).notNull(),
+  content: text("content").notNull(),
+  createdAt: integer("created_at").notNull(),
+});
+
+/** On-demand display-only translation cache. One table serves EVERY
+ * non-base language (lang is a free-form code) — this is why no other
+ * table needs per-language columns. */
+export const translations = sqliteTable("translations", {
+  hash: text("hash").primaryKey(), // sha256(lang + "\n" + sourceText)
+  lang: text("lang").notNull(),
+  sourceText: text("source_text").notNull(),
+  translatedText: text("translated_text").notNull(),
+  createdAt: integer("created_at").notNull(),
+});
+
 export const jobs = sqliteTable(
   "jobs",
   {

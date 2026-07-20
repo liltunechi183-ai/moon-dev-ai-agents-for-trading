@@ -13,6 +13,8 @@ async function main() {
   const { startOrderSync, setFillSettledHandler } = await import("./order-sync");
   const { startBotRunner } = await import("./bot-runner");
   const { rebuildBotTrades } = await import("@/lib/bot/ledger");
+  const { startBacktestRunner } = await import("./backtest-runner");
+  const { startTranslateRunner } = await import("./translate-runner");
 
   console.log(
     `[worker] booting — paper=${env.paper} hasAlpacaKeys=${env.hasAlpacaKeys} db=${env.databasePath}`,
@@ -26,6 +28,8 @@ async function main() {
   setFillSettledHandler(() => rebuildBotTrades());
   startOrderSync();
   startBotRunner();
+  startBacktestRunner();
+  startTranslateRunner();
 
   console.log("[worker] all runners started");
 }

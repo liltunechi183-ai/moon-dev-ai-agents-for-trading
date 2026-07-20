@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { PredictionCard } from "./PredictionCard";
+import { ChallengeChat } from "./ChallengeChat";
 import type { CalibrationDto, OutcomeDto, PredictionDto } from "@/lib/predictions-types";
 
 interface HistoryEntry {
@@ -41,6 +42,7 @@ export function PredictionSection({ symbol }: { symbol: string }) {
         item={{ symbol, prediction: latest, calibration, outcome: null }}
         onRefresh={refresh}
       />
+      {latest && <ChallengeChat predictionId={latest.id} onRevised={refresh} />}
       {history.length > 0 && (
         <details className="rounded-lg border border-white/10 bg-white/[0.02] p-3 text-sm">
           <summary className="cursor-pointer text-xs uppercase tracking-wide text-zinc-500">

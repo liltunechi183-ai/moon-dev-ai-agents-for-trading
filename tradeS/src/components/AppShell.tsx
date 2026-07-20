@@ -2,19 +2,51 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { LanguageProvider, useI18n } from "@/lib/i18n/provider";
+import { SUPPORTED_LANGUAGES } from "@/lib/i18n/config";
 
 const NAV_LINKS = [
-  { href: "/", label: "Dashboard" },
-  { href: "/predictions", label: "Predictions" },
-  { href: "/discoveries", label: "Discoveries" },
-  { href: "/trade", label: "Trade" },
-  { href: "/bot", label: "Bot" },
-  { href: "/strategy", label: "Strategy" },
-  { href: "/howto", label: "How-to" },
+  { href: "/", key: "nav.dashboard" },
+  { href: "/predictions", key: "nav.predictions" },
+  { href: "/discoveries", key: "nav.discoveries" },
+  { href: "/trade", key: "nav.trade" },
+  { href: "/bot", key: "nav.bot" },
+  { href: "/strategy", key: "nav.strategy" },
+  { href: "/howto", key: "nav.howto" },
 ];
 
+function LanguageSwitcher() {
+  const { lang, setLang } = useI18n();
+  // Data-driven: hides itself while only the base language is configured.
+  if (SUPPORTED_LANGUAGES.length < 2) return null;
+  return (
+    <div className="flex gap-1">
+      {SUPPORTED_LANGUAGES.map((l) => (
+        <button
+          key={l.code}
+          onClick={() => setLang(l.code)}
+          className={`rounded px-2 py-1 text-xs ${
+            lang === l.code ? "bg-white/10 text-zinc-100" : "text-zinc-500 hover:text-zinc-200"
+          }`}
+        >
+          {l.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function AppShell({ children }: { children: React.ReactNode }) {
+  return (
+    <LanguageProvider>
+      <ShellInner>{children}</ShellInner>
+    </LanguageProvider>
+  );
+}
+
+function ShellInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { t } = useI18n();
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -38,16 +70,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                       : "text-zinc-400 hover:text-zinc-100 hover:bg-white/5"
                   }`}
                 >
-                  {link.label}
+                  {t(link.key)}
                 </Link>
               );
             })}
           </nav>
+          <LanguageSwitcher />
         </div>
       </header>
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6">{children}</main>
       <footer className="border-t border-white/10 px-4 py-4 text-center text-xs text-zinc-600">
-        Decision-support research only. Not financial advice.
+        {t("common.notAdvice")}
       </footer>
     </div>
   );

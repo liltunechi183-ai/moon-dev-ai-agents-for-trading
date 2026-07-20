@@ -1,7 +1,16 @@
 import { and, asc, eq, inArray, lt, sql } from "drizzle-orm";
 import { db, tables } from "@/lib/db";
 
-export type JobType = "chat" | "research" | "postmortem" | "relations" | "backtest" | "discovery" | "cycle" | "resolve";
+export type JobType =
+  | "chat"
+  | "research"
+  | "postmortem"
+  | "relations"
+  | "backtest"
+  | "discovery"
+  | "cycle"
+  | "resolve"
+  | "translate";
 
 export type JobRow = typeof tables.jobs.$inferSelect;
 

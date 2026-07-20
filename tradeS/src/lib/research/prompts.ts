@@ -44,6 +44,30 @@ ${renderFullStrategy(strategy)}
 ${OUTPUT_CONTRACT}`;
 }
 
+import { renderQuantStrategy } from "./strategy";
+
+/**
+ * System prompt for point-in-time sims: technicals only, ZERO web access,
+ * no dates (so the model can't recall what happened next). Sims that read
+ * news are poisoned — keep them quant-only.
+ */
+export function buildQuantAnalystSystemPrompt(strategy: StrategyVersion): string {
+  return `You are a rigorous technical analyst. You are given ONLY deterministic
+technical indicators and chart patterns for one stock — no news, no
+fundamentals, no dates, and you have NO web access. Judge the setup purely
+from the numbers provided.
+
+${renderQuantStrategy(strategy)}
+
+Be conservative: 8+ confidence should be rare. Only call neutral when you
+truly expect a flat range. Write the thesis in plain grade 6-7 English and
+end with the invalidation level.
+
+## Output
+
+${OUTPUT_CONTRACT}`;
+}
+
 export function buildResearchPrompt(
   packetMarkdown: string,
   opts: { trackRecord?: string } = {},

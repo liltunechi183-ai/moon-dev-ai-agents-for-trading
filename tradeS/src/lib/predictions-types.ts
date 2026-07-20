@@ -16,6 +16,7 @@ export interface PredictionDto {
   status: "ok" | "error";
   algoVersion: number | null;
   regime: string | null;
+  revisedFromId: number | null;
 }
 
 export interface OutcomeDto {

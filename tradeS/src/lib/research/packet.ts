@@ -18,7 +18,7 @@ export interface ResearchPacket {
   quantSnapshot: { indicators: IndicatorSnapshot; patterns: Pattern[] };
 }
 
-function renderQuantBullets(ind: IndicatorSnapshot, patterns: Pattern[]): string {
+export function renderQuantBullets(ind: IndicatorSnapshot, patterns: Pattern[]): string {
   const lines: string[] = [];
   const price = ind.lastClose;
   const vs = (ma: number | null, name: string) => {

@@ -17,11 +17,18 @@ const PRIORITY: Array<"chat" | "research" | "postmortem" | "relations"> = [
   "postmortem",
   "relations",
 ];
-const HANDLED = new Set<string>(["research"]);
+const HANDLED = new Set<string>(["chat", "research"]);
 
 let busy = false;
 
 async function handleJob(job: JobRow): Promise<void> {
+  if (job.type === "chat") {
+    const { predictionId } = job.payload as { predictionId: number };
+    const { runChallenge } = await import("@/lib/research/challenge");
+    const result = await runChallenge(predictionId);
+    completeJob(job.id, result);
+    return;
+  }
   if (job.type === "research") {
     const { symbol } = job.payload as { symbol: string };
     console.log(`[research-runner] researching ${symbol} (job ${job.id})`);

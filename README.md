@@ -6,6 +6,45 @@
 
 This project explores the potential of [artificial financial intelligence](https://www.afi.xyz) - a focused implementation of AI for trading and investing research.
 
+## 🛡️ Safety upgrade — Paper mode, a risk agent, and measurement
+
+The trading agent now runs in **paper mode by default** (fake money, real
+prices) and only measures itself against reality. Nothing here changes the
+disclaimers below — it just makes the bot safe to *evaluate* before risking a
+cent. What was added:
+
+- **`PAPER_TRADING = True`** (in `src/core/config.py`) is the single
+  paper/live switch. Every buy/sell routes through a **broker abstraction**
+  (`src/core/broker.py`), so the agent never calls the chain directly. Going
+  live is deliberately awkward: you must set `PAPER_TRADING = False` **and**
+  export `ALLOW_LIVE_TRADING=true`. Miss either and it stays on paper.
+- **Risk agent** (`src/agents/risk.py`, previously empty) — a pure pre-trade
+  gate: minimum confidence, per-position cap, cash buffer, max open positions,
+  a daily-loss circuit breaker, and a per-token cooldown. Every buy passes it
+  first; it can shrink an order to fit the caps or block it with a reason.
+- **Sentiment agent** (`src/agents/sentiment.py`, previously empty) — a
+  keyless price-action sentiment *proxy* with a pluggable interface for real
+  social feeds later. Honestly labeled as a proxy, never as real crowd data.
+- **Measurement** (`src/core/tracker.py`) — the thing the bot was missing:
+  every AI call is logged with the price at decision time, graded against what
+  the price actually did, and reported as a win rate **by action and by
+  confidence** each run. This is how you find out whether the AI has real
+  skill instead of trusting its self-reported confidence.
+
+Run it, watch the accuracy report for a few weeks on paper, and let the
+numbers — not hope — decide whether it's ever worth real money.
+
+```bash
+pip install -r requirements.txt
+cp ".env example" .env      # add ANTHROPIC_KEY (+ BIRDEYE_API_KEY for live data)
+python -m src.main          # starts in PAPER mode by default
+python -m pytest tests/     # unit tests for the risk/paper/tracker logic
+```
+
+⚠️ This bot trades **Solana memecoins**, one of the highest-risk asset
+classes that exists. Paper mode does not make the strategy profitable — it
+only lets you find out safely.
+
 ## 🎯 Vision
 We're researching AI agents for trading that may eventually leverage [AFI](https://www.afi.xyz). With 4 years of experience training humans through our [bootcamp](https://algotradecamp.com), we're exploring where AI agents might complement human trading operations. This is experimental research, not a profitable trading solution.
 

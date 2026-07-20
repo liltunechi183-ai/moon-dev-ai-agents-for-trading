@@ -1,0 +1,15 @@
+# Moon Dev AI Trading System — Python dependencies
+anthropic
+pandas
+pandas_ta
+numpy
+requests
+python-dotenv
+termcolor
+schedule
+solders
+solana
+base58
+
+# Dev / testing
+pytest

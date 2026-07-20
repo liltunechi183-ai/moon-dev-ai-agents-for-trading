@@ -30,12 +30,37 @@ max_usd_order_size = 1  # Max order size
 tx_sleep = 30  # Sleep between transactions
 slippage = 199  # Slippage settings
 
+# ═══════════════════════════════════════════════════════════════════════════
+# 🛡️ SAFETY MODE — READ THIS 🛡️
+# ═══════════════════════════════════════════════════════════════════════════
+# PAPER_TRADING is the single paper/live decision point for the whole bot.
+# When True (the default), NO real money moves: the broker simulates every
+# buy/sell against real prices and tracks a fake portfolio on disk. This lets
+# you measure whether the AI actually has skill BEFORE risking a cent.
+#
+# Going live is deliberately awkward — it needs BOTH of these, on purpose:
+#   1. PAPER_TRADING = False here, AND
+#   2. the env var ALLOW_LIVE_TRADING=true set in your shell.
+# If either is missing, the bot refuses to touch the chain and stays on paper.
+# (Solana memecoins are extremely high risk. Stay on paper until your own
+# accuracy report — see tracker.py — proves the bot is worth real money.)
+PAPER_TRADING = True
+
+# Starting fake balance (USD) for the paper portfolio.
+PAPER_STARTING_CASH = 100.0
+
 # Risk Management Settings 🛡️
 CASH_PERCENTAGE = 20  # Minimum % to keep in USDC as safety buffer (0-100)
 MAX_POSITION_PERCENTAGE = 30  # Maximum % allocation per position (0-100)
 STOPLOSS_PRICE = 1
 BREAKOUT_PRICE = .0001
 SLEEP_AFTER_CLOSE = 600  # Prevent overtrading
+
+# Extra risk gates enforced by the risk agent (src/agents/risk.py) 🛡️
+MIN_CONFIDENCE_TO_TRADE = 60   # skip AI BUYs below this confidence (0-100)
+MAX_OPEN_POSITIONS = 3         # never hold more than this many tokens at once
+MAX_DAILY_LOSS_USD = 15.0      # circuit breaker: halt new buys once down this much on the day
+COOLDOWN_MINUTES_AFTER_CLOSE = 10  # per-token wait after closing before re-buying
 
 # Transaction settings ⚡
 slippage = 199  # 50% slippage, 500 = 5% and 50 = .5% slippage

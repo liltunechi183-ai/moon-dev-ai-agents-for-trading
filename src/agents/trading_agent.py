@@ -56,12 +56,17 @@ Remember:
 
 import anthropic
 import os
-import pandas as pd
 import json
+import pandas as pd
 from termcolor import colored, cprint
 from dotenv import load_dotenv
+from ..core import config
 from ..core.config import *
 from ..core import nice_funcs as n  # Import nice_funcs as n
+from ..core.broker import get_broker
+from ..core.tracker import DecisionTracker
+from ..agents.risk import check_trade, limits_from_config, RiskInputs
+from ..agents import sentiment as sentiment_agent
 from ..data.ohlcv_collector import collect_all_tokens
 from datetime import datetime, timedelta
 import time
@@ -69,32 +74,84 @@ import time
 # Load environment variables
 load_dotenv()
 
+
+def _price(token):
+    """Live price lookup, used by both the paper broker (for marks) and the
+    tracker (for grading). The only place the agent reads a raw chain price."""
+    return n.token_price(token)
+
+
+def day_start_equity(broker, path="bot_data/day_equity.json"):
+    """Persisted opening equity for the day (for the daily-loss circuit
+    breaker). Refreshes when the calendar date rolls over."""
+    today = datetime.now().strftime("%Y-%m-%d")
+    stored = None
+    if os.path.exists(path):
+        try:
+            with open(path) as f:
+                stored = json.load(f)
+        except Exception:
+            stored = None
+    if not stored or stored.get("date") != today:
+        eq = broker.equity()
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        with open(path, "w") as f:
+            json.dump({"date": today, "equity": eq}, f)
+        return eq
+    return stored["equity"]
+
+
 class TradingAgent:
     def __init__(self):
         """Initialize the AI Trading Agent with Moon Dev's magic ✨"""
         api_key = os.getenv("ANTHROPIC_KEY")
         if not api_key:
             raise ValueError("🚨 ANTHROPIC_KEY not found in environment variables!")
-            
+
         self.client = anthropic.Anthropic(api_key=api_key)
         self.recommendations_df = pd.DataFrame(columns=['token', 'action', 'confidence', 'reasoning'])
-        print("🤖 Moon Dev's AI Trading Agent initialized!")
+        # The broker is the SINGLE paper/live decision point — the agent never
+        # calls nice_funcs execution directly.
+        self.broker = get_broker(price_fn=_price)
+        self.risk_limits = limits_from_config(config)
+        self.tracker = DecisionTracker(
+            horizon_minutes=RUN_INTERVAL_MINUTES * 4,  # grade a call ~4 cycles later
+        )
+        # Cooldown bookkeeping: token -> datetime of last close this session.
+        self.last_close_at = {}
+        cprint(f"🤖 Moon Dev's AI Trading Agent initialized in {self.broker.mode.upper()} mode!", "white", "on_blue")
         
-    def analyze_market_data(self, token, market_data):
-        """Analyze market data using Claude"""
+    def _sentiment_for(self, market_df):
+        """Keyless price-action sentiment proxy from the OHLCV frame."""
         try:
+            closes = market_df["Close"].tolist() if hasattr(market_df, "columns") else []
+            volumes = market_df["Volume"].tolist() if hasattr(market_df, "columns") else None
+            return sentiment_agent.combined_sentiment(None, closes, volumes)
+        except Exception:
+            return sentiment_agent.Sentiment(0.0, "neutral", "price-action-proxy", "unavailable")
+
+    def analyze_market_data(self, token, market_df):
+        """Analyze market data using Claude, blended with a sentiment proxy."""
+        try:
+            sent = self._sentiment_for(market_df)
+            market_data = market_df.to_dict() if hasattr(market_df, "to_dict") else market_df
+            sentiment_note = (
+                f"\n\nSentiment proxy (price-action, NOT real social data): "
+                f"{sent.label} (score {sent.score:+.2f}, {sent.detail})."
+            )
+
             message = self.client.messages.create(
                 model=AI_MODEL,
                 max_tokens=AI_MAX_TOKENS,
                 temperature=AI_TEMPERATURE,
                 messages=[
                     {
-                        "role": "user", 
-                        "content": f"{TRADING_PROMPT}\n\nMarket Data to Analyze:\n{market_data}"
+                        "role": "user",
+                        "content": f"{TRADING_PROMPT}\n\nMarket Data to Analyze:\n{market_data}{sentiment_note}"
                     }
                 ]
             )
-            
+
             # Parse the response - handle both string and list responses
             response = message.content
             if isinstance(response, list):
@@ -103,10 +160,10 @@ class TradingAgent:
                     item.text if hasattr(item, 'text') else str(item)
                     for item in response
                 ])
-            
+
             lines = response.split('\n')
             action = lines[0].strip() if lines else "NOTHING"
-            
+
             # Extract confidence from the response (assuming it's mentioned as a percentage)
             confidence = 0
             for line in lines:
@@ -116,7 +173,7 @@ class TradingAgent:
                         confidence = int(''.join(filter(str.isdigit, line)))
                     except:
                         confidence = 50  # Default if not found
-            
+
             # Add to recommendations DataFrame with proper reasoning
             reasoning = '\n'.join(lines[1:]) if len(lines) > 1 else "No detailed reasoning provided"
             self.recommendations_df = pd.concat([
@@ -128,8 +185,16 @@ class TradingAgent:
                     'reasoning': reasoning
                 }])
             ], ignore_index=True)
-            
-            print(f"🎯 Moon Dev's AI Analysis Complete for {token[:4]}!")
+
+            # Measurement: log this call with the price NOW so a later run can
+            # grade whether the AI was right. This is what proves (or disproves)
+            # skill over time — read it with tracker.report().
+            try:
+                self.tracker.log_decision(token, action, confidence, _price(token))
+            except Exception as e:
+                cprint(f"⚠️ could not log decision for {token[:4]}: {e}", "white", "on_yellow")
+
+            print(f"🎯 Moon Dev's AI Analysis Complete for {token[:4]}! (sentiment: {sent.label})")
             return response
             
         except Exception as e:
@@ -235,133 +300,176 @@ class TradingAgent:
             return None
 
     def execute_allocations(self, allocation_dict):
-        """Execute the allocations using AI entry for each position"""
+        """Execute the allocations — every buy passes the RISK GATE first and
+        goes through the broker (paper or live). The agent never touches the
+        chain directly."""
         try:
-            print("\n🚀 Moon Dev executing portfolio allocations...")
-            
+            cprint(f"\n🚀 Executing allocations in {self.broker.mode.upper()} mode...", "white", "on_blue")
+
+            day_start = day_start_equity(self.broker)
+            equity = self.broker.equity()
+            open_positions = self.broker.open_positions()
+            open_count = len(open_positions) if open_positions else 0
+
             for token, amount in allocation_dict.items():
-                # Skip USDC - that's our cash position
                 if token == USDC_ADDRESS:
                     print(f"💵 Keeping ${amount:.2f} in USDC as buffer")
                     continue
-                    
-                print(f"\n🎯 Checking position for {token}...")
-                
+
+                cprint(f"\n🎯 Considering {token[:8]} (target ${amount:.2f})...", "white", "on_blue")
                 try:
-                    # Get current position value
-                    current_position = n.get_token_balance_usd(token)
-                    target_allocation = amount  # This is the target from our portfolio calc
-                    
-                    # Calculate entry threshold (97% of target)
-                    entry_threshold = target_allocation * 0.97
-                    
-                    print(f"🎯 Target allocation: ${target_allocation:.2f} USD")
-                    print(f"📊 Current position: ${current_position:.2f} USD")
-                    print(f"⚖️ Entry threshold: ${entry_threshold:.2f} USD")
-                    
-                    if current_position < entry_threshold:
-                        print(f"✨ Position below threshold - executing entry for {token}")
-                        n.ai_entry(token, amount)
-                        print(f"✅ Entry complete for {token}")
-                    else:
-                        print(f"⏸️ Position already at target size for {token}")
-                    
+                    current_position = self.broker.position_usd(token)
+
+                    # Only enter if we're meaningfully below target (97% threshold).
+                    if current_position >= amount * 0.97:
+                        print(f"⏸️ Position already near target (${current_position:.2f}) — skipping")
+                        continue
+
+                    last_close = self.last_close_at.get(token)
+                    mins_since_close = (
+                        (datetime.now() - last_close).total_seconds() / 60.0 if last_close else None
+                    )
+
+                    decision = check_trade(
+                        RiskInputs(
+                            token=token,
+                            confidence=self._confidence_for(token),
+                            proposed_usd=amount - current_position,
+                            equity_usd=equity,
+                            cash_usd=self.broker.cash(),
+                            current_position_usd=current_position,
+                            open_position_count=open_count,
+                            day_start_equity=day_start,
+                            minutes_since_last_close=mins_since_close,
+                        ),
+                        self.risk_limits,
+                    )
+
+                    if not decision.allow:
+                        cprint(f"🛡️ Risk gate blocked {token[:8]}: {decision.reason}", "white", "on_yellow")
+                        continue
+
+                    cprint(f"✅ Risk gate: {decision.reason}", "white", "on_green")
+                    ok, reason = self.broker.buy(token, decision.approved_usd)
+                    if ok and current_position <= 0:
+                        open_count += 1  # a new position was opened this run
+
                 except Exception as e:
-                    print(f"❌ Error executing entry for {token}: {str(e)}")
-                
-                # Small delay between entries
+                    print(f"❌ Error executing entry for {token[:8]}: {str(e)}")
+
                 time.sleep(2)
-                
+
         except Exception as e:
             print(f"❌ Error executing allocations: {str(e)}")
             print("🔧 Moon Dev suggests checking the logs and trying again!")
 
+    def _confidence_for(self, token):
+        """The AI confidence recorded for a token this run (0 if none)."""
+        rows = self.recommendations_df[self.recommendations_df['token'] == token]
+        if rows.empty:
+            return 0
+        try:
+            return float(rows.iloc[-1]['confidence'])
+        except Exception:
+            return 0
+
     def handle_exits(self):
-        """Check and exit positions based on SELL or NOTHING recommendations"""
+        """Close positions the AI wants out of — through the broker."""
         cprint("\n🔄 Checking for positions to exit...", "white", "on_blue")
-        
+
         for _, row in self.recommendations_df.iterrows():
             token = row['token']
             action = row['action']
-            
-            # Check if we have a position
-            current_position = n.get_token_balance_usd(token)
-            
+
+            current_position = self.broker.position_usd(token)
+
             if current_position > 0 and action in ["SELL", "NOTHING"]:
-                cprint(f"\n🚫 AI Agent recommends {action} for {token[:8]} (Current position: ${current_position:.2f})", "white", "on_yellow")
+                cprint(f"\n🚫 AI recommends {action} for {token[:8]} (position ${current_position:.2f})", "white", "on_yellow")
                 try:
-                    cprint(f"📉 Closing position for {token[:8]}...", "white", "on_blue")
-                    n.chunk_kill(token, max_usd_order_size, slippage)
-                    cprint(f"✅ Successfully closed position for {token[:8]}", "white", "on_green")
+                    ok, realized = self.broker.close(token)
+                    if ok:
+                        self.last_close_at[token] = datetime.now()
+                        cprint(f"✅ Closed {token[:8]}", "white", "on_green")
                 except Exception as e:
-                    cprint(f"❌ Error closing position for {token[:8]}: {str(e)}", "white", "on_red")
+                    cprint(f"❌ Error closing {token[:8]}: {str(e)}", "white", "on_red")
             elif current_position > 0:
-                cprint(f"✨ Keeping position for {token[:8]} (${current_position:.2f}) - AI recommends {action}", "white", "on_blue")
+                cprint(f"✨ Keeping {token[:8]} (${current_position:.2f}) — AI says {action}", "white", "on_blue")
+
+def _print_accuracy(agent):
+    """Show the measured track record — the whole point of paper mode."""
+    report = agent.tracker.report()
+    if not report["graded"]:
+        cprint("\n📏 No graded decisions yet — accuracy appears once calls mature.", "white", "on_blue")
+        return
+    cprint("\n📏 MEASURED ACCURACY (is the AI actually right?)", "white", "on_blue")
+    print(f"   Graded calls: {report['graded']}  |  Overall win rate: {report['win_rate']*100:.0f}%")
+    print(f"   Avg move per call: {report['avg_return_pct']:+.1f}%")
+    for act, s in report["by_action"].items():
+        print(f"   {act:8} {s['win_rate']*100:.0f}% right (n={s['n']})")
+    for b, s in report["by_confidence"].items():
+        print(f"   confidence {b:4} {s['win_rate']*100:.0f}% right (n={s['n']})")
+
 
 def main():
     """Main function to run the trading agent every 15 minutes"""
     cprint("🌙 Moon Dev AI Trading System Starting Up! 🚀", "white", "on_blue")
-    
+    mode = "PAPER (fake money)" if config.PAPER_TRADING else "LIVE ⚠️ REAL MONEY"
+    cprint(f"🛡️  Trading mode: {mode}", "white", "on_green" if config.PAPER_TRADING else "on_red")
+    if not config.PAPER_TRADING:
+        cprint("   (Live still requires ALLOW_LIVE_TRADING=true in your env, or it stays paper.)", "white", "on_yellow")
+
     INTERVAL = RUN_INTERVAL_MINUTES * 60  # Convert minutes to seconds
-    
+
     while True:
         try:
             current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             cprint(f"\n⏰ AI Agent Run Starting at {current_time}", "white", "on_green")
-            
+
             # Collect OHLCV data for all tokens
             cprint("📊 Collecting market data...", "white", "on_blue")
             market_data = collect_all_tokens()
-            
+
             # Initialize AI agent
             agent = TradingAgent()
-            
+
+            # Grade any decisions that have now matured (measurement first).
+            try:
+                graded = agent.tracker.grade_matured(_price)
+                if graded:
+                    cprint(f"📏 Graded {graded} matured decision(s).", "white", "on_blue")
+            except Exception as e:
+                cprint(f"⚠️ grading step failed: {e}", "white", "on_yellow")
+
             # Analyze each token's data
             for token, data in market_data.items():
                 cprint(f"\n🤖 AI Agent Analyzing Token: {token}", "white", "on_green")
-                analysis = agent.analyze_market_data(token, data.to_dict())
+                analysis = agent.analyze_market_data(token, data)  # pass the DataFrame
                 print(f"\n📈 Analysis for contract: {token}")
                 print(analysis)
                 print("\n" + "="*50 + "\n")
-            
+
             # Show recommendations summary (without reasoning)
             cprint("\n📊 Moon Dev's Trading Recommendations:", "white", "on_blue")
             summary_df = agent.recommendations_df[['token', 'action', 'confidence']].copy()
             print(summary_df.to_string(index=False))
-            
-            # First handle any exits based on recommendations
-            cprint("\n🔄 Checking for positions to exit...", "white", "on_blue")
-            
-            # Handle exits first - close any positions where recommendation is SELL or NOTHING
-            for _, row in agent.recommendations_df.iterrows():
-                token = row['token']
-                action = row['action']
-                
-                if action in ["SELL", "NOTHING"]:
-                    current_position = n.get_token_balance_usd(token)
-                    if current_position > 0:
-                        cprint(f"\n🚫 AI Agent recommends {action} for {token}", "white", "on_yellow")
-                        cprint(f"💰 Current position: ${current_position:.2f}", "white", "on_blue")
-                        try:
-                            cprint(f"📉 Closing position with chunk_kill...", "white", "on_cyan")
-                            n.chunk_kill(token, max_usd_order_size, slippage)
-                            cprint(f"✅ Successfully closed position", "white", "on_green")
-                        except Exception as e:
-                            cprint(f"❌ Error closing position: {str(e)}", "white", "on_red")
-            
-            # Then proceed with new allocations for BUY recommendations
+
+            # Handle exits first — through the broker (paper or live).
+            agent.handle_exits()
+
+            # Then proceed with new allocations for BUY recommendations.
             cprint("\n💰 Calculating optimal portfolio allocation...", "white", "on_blue")
             allocation = agent.allocate_portfolio(usd_size)
-            
+
             if allocation:
                 cprint("\n💼 Moon Dev's Portfolio Allocation:", "white", "on_blue")
                 print(json.dumps(allocation, indent=4))
-                
-                cprint("\n🎯 Executing allocations...", "white", "on_blue")
                 agent.execute_allocations(allocation)
-                cprint("\n✨ All allocations executed!", "white", "on_blue")
+                cprint("\n✨ Allocation pass complete!", "white", "on_blue")
             else:
                 cprint("\n⚠️ No allocations to execute!", "white", "on_yellow")
+
+            # Show the measured track record.
+            _print_accuracy(agent)
             
             next_run = datetime.now() + timedelta(minutes=RUN_INTERVAL_MINUTES)
             cprint(f"\n⏳ AI Agent run complete. Next run at {next_run.strftime('%Y-%m-%d %H:%M:%S')}", "white", "on_green")

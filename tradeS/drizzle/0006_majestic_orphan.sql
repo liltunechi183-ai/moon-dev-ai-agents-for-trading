@@ -1,0 +1,35 @@
+CREATE TABLE `discoveries` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`scan_id` integer NOT NULL,
+	`symbol` text NOT NULL,
+	`company_name` text NOT NULL,
+	`angle` text,
+	`theme` text NOT NULL,
+	`theme_zh` text,
+	`thesis` text NOT NULL,
+	`thesis_zh` text,
+	`why_overlooked` text NOT NULL,
+	`why_overlooked_zh` text,
+	`catalysts` text NOT NULL,
+	`catalysts_zh` text,
+	`risks` text NOT NULL,
+	`risks_zh` text,
+	`sources` text NOT NULL,
+	`confidence` integer NOT NULL,
+	`horizon_days` integer NOT NULL,
+	`model` text,
+	`status` text DEFAULT 'pending' NOT NULL,
+	`created_at` integer NOT NULL,
+	`resolved_at` integer,
+	`price_at_discovery` real,
+	`atr_pct_at_discovery` real,
+	`evaluated_at` integer,
+	`price_at_horizon` real,
+	`return_pct` real,
+	`direction_correct` integer,
+	`neutral_band_pct` real,
+	`benchmark_return_pct` real
+);
+--> statement-breakpoint
+CREATE INDEX `discoveries_status_created_idx` ON `discoveries` (`status`,`created_at`);--> statement-breakpoint
+CREATE INDEX `discoveries_symbol_created_idx` ON `discoveries` (`symbol`,`created_at`);

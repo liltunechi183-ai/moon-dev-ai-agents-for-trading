@@ -392,6 +392,58 @@ export const ruleSuggestions = sqliteTable("rule_suggestions", {
   resolvedAt: integer("resolved_at"),
 });
 
+// ---------------------------------------------------------------------------
+// Phase 7: dark-horse discovery. The inbox AND its own graded track record,
+// one row per pick (in-place grading). Worker-written; Next writes only the
+// approve/dismiss status transitions.
+// ---------------------------------------------------------------------------
+
+export const discoveries = sqliteTable(
+  "discoveries",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    scanId: integer("scan_id").notNull(), // ms timestamp grouping one scan's picks
+    symbol: text("symbol").notNull(),
+    companyName: text("company_name").notNull(),
+    angle: text("angle", {
+      enum: ["second-order", "primary-source", "commodity-chain", "dislocation"],
+    }), // null = pre-angle rows
+    theme: text("theme").notNull(),
+    themeZh: text("theme_zh"),
+    thesis: text("thesis").notNull(),
+    thesisZh: text("thesis_zh"),
+    whyOverlooked: text("why_overlooked").notNull(),
+    whyOverlookedZh: text("why_overlooked_zh"),
+    catalysts: text("catalysts", { mode: "json" }).notNull().$type<string[]>(),
+    catalystsZh: text("catalysts_zh", { mode: "json" }).$type<string[]>(),
+    risks: text("risks", { mode: "json" }).notNull().$type<string[]>(),
+    risksZh: text("risks_zh", { mode: "json" }).$type<string[]>(),
+    sources: text("sources", { mode: "json" }).notNull().$type<Array<{ title: string; url: string }>>(),
+    confidence: integer("confidence").notNull(),
+    horizonDays: integer("horizon_days").notNull(),
+    model: text("model"),
+    status: text("status", { enum: ["pending", "approved", "dismissed"] })
+      .notNull()
+      .default("pending"),
+    createdAt: integer("created_at").notNull(),
+    resolvedAt: integer("resolved_at"),
+    // Snapshot at scan time — the grading ENTRY price, never re-derived.
+    priceAtDiscovery: real("price_at_discovery"),
+    atrPctAtDiscovery: real("atr_pct_at_discovery"),
+    // Grading columns, filled once the horizon elapses for ALL statuses.
+    evaluatedAt: integer("evaluated_at"),
+    priceAtHorizon: real("price_at_horizon"),
+    returnPct: real("return_pct"),
+    directionCorrect: integer("direction_correct", { mode: "boolean" }), // every pick is an implicit bullish call
+    neutralBandPct: real("neutral_band_pct"),
+    benchmarkReturnPct: real("benchmark_return_pct"),
+  },
+  (t) => [
+    index("discoveries_status_created_idx").on(t.status, t.createdAt),
+    index("discoveries_symbol_created_idx").on(t.symbol, t.createdAt),
+  ],
+);
+
 export const jobs = sqliteTable(
   "jobs",
   {

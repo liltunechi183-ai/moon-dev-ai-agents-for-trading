@@ -19,6 +19,7 @@ async function main() {
   const { startStrategistRunner } = await import("./strategist-runner");
   const { startCatchup } = await import("./catchup");
   const { startImproveRunner } = await import("./improve-runner");
+  const { startDiscoveryRunner } = await import("./discovery-runner");
 
   console.log(
     `[worker] booting — paper=${env.paper} hasAlpacaKeys=${env.hasAlpacaKeys} db=${env.databasePath}`,
@@ -37,6 +38,7 @@ async function main() {
   startGauntletRunner();
   startStrategistRunner();
   startImproveRunner();
+  startDiscoveryRunner();
   startCatchup();
 
   console.log("[worker] all runners started");

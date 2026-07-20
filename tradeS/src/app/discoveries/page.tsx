@@ -1,5 +1,5 @@
-import { ComingSoon } from "@/components/ComingSoon";
+import { DiscoveriesPanel } from "@/components/DiscoveriesPanel";
 
 export default function DiscoveriesPage() {
-  return <ComingSoon title="Discoveries" phase="Phase 7" />;
+  return <DiscoveriesPanel />;
 }

@@ -43,6 +43,13 @@
       "when": 1784557965125,
       "tag": "0005_grey_radioactive_man",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1784573564971,
+      "tag": "0006_majestic_orphan",
+      "breakpoints": true
     }
   ]
 }

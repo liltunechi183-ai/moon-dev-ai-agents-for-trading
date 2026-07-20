@@ -65,8 +65,19 @@ export async function runCatchup(force = false): Promise<void> {
     await runStrategist().catch((err) => console.error("[catchup] strategist failed:", err));
   }
 
-  // 5. Weekly discovery scan is added in Phase 7; deliberately NOT
-  //    force-bypassed there.
+  // 5. Weekly discovery scan (skip when any discoveries row was written in
+  //    the last 6 days). Deliberately NOT force-bypassed: the force button
+  //    belongs to the improvement loop, and discovery has its own Scan-now
+  //    button; silently burning a long web-research scan on every click
+  //    would be surprising.
+  try {
+    const { discoveryScannedWithin, runDiscoveryScan } = await import("@/lib/discovery/hunter");
+    if (!discoveryScannedWithin(6)) {
+      await runDiscoveryScan();
+    }
+  } catch (err) {
+    console.error("[catchup] discovery scan failed:", err);
+  }
 
   console.log("[catchup] done");
 }

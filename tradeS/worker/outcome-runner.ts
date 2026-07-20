@@ -162,9 +162,74 @@ export async function gradeMaturedShadows(): Promise<number> {
   return graded;
 }
 
+/** Grade matured discoveries in place — ALL statuses including dismissed.
+ * Every pick is an implicit BULLISH call. A dismissed symbol isn't tracked,
+ * so its bars went stale: refresh first, and treat a failed fetch as "try
+ * tomorrow". Entry price is the STORED priceAtDiscovery, never re-derived. */
+export async function gradeMaturedDiscoveries(): Promise<number> {
+  const now = Date.now();
+  const candidates = db
+    .select()
+    .from(tables.discoveries)
+    .where(isNull(tables.discoveries.evaluatedAt))
+    .all()
+    .filter((d) => d.priceAtDiscovery != null && d.createdAt + d.horizonDays * DAY_MS <= now);
+
+  if (candidates.length === 0) return 0;
+
+  let spyBars: Bar[] = [];
+  try {
+    spyBars = await fetchBarsCovering("SPY", Math.min(...candidates.map((c) => c.createdAt)));
+  } catch {
+    // benchmark optional
+  }
+
+  let graded = 0;
+  for (const d of candidates) {
+    try {
+      // Dismissed/untracked symbols have stale bars — refresh; a failed fetch
+      // just defers to tomorrow.
+      let bars: Bar[];
+      try {
+        bars = await getDailyBars(d.symbol, 200);
+        cacheDailyBars(d.symbol, bars);
+      } catch {
+        continue;
+      }
+      const horizonTs = d.createdAt + d.horizonDays * DAY_MS;
+      // Entry is the STORED price; find the horizon close from fresh bars.
+      const horizonBar = bars.find((b) => b.ts >= horizonTs);
+      if (!horizonBar) continue; // not matured in the data yet
+
+      const entry = d.priceAtDiscovery!;
+      const returnPct = ((horizonBar.close - entry) / entry) * 100;
+      const band = neutralBandFor(d.atrPctAtDiscovery, d.horizonDays);
+      const benchmark = spyBars.length ? extractGradingWindow(spyBars, d.createdAt, horizonTs) : null;
+
+      db.update(tables.discoveries)
+        .set({
+          evaluatedAt: now,
+          priceAtHorizon: horizonBar.close,
+          returnPct,
+          directionCorrect: gradeDirection("bullish", returnPct, band),
+          neutralBandPct: band,
+          benchmarkReturnPct: benchmark?.returnPct ?? null,
+        })
+        .where(eq(tables.discoveries.id, d.id))
+        .run();
+      graded++;
+    } catch (err) {
+      console.error(`[outcome-runner] discovery grading failed for ${d.symbol} (${d.id}):`, err);
+    }
+  }
+  if (graded > 0) console.log(`[outcome-runner] graded ${graded} discovery pick(s)`);
+  return graded;
+}
+
 async function runAllGrading(): Promise<void> {
   await gradeMaturedPredictions();
   await gradeMaturedShadows();
+  await gradeMaturedDiscoveries();
 }
 
 export function startOutcomeRunner(): void {

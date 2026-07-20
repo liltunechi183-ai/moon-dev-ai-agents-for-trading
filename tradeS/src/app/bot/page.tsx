@@ -5,6 +5,7 @@ import { BotConfigPanel, type BotConfigDto } from "@/components/BotConfigPanel";
 import { BotRulesPanel, type BotRuleDto } from "@/components/BotRulesPanel";
 import { BotActivityFeed, type BotActivityDto } from "@/components/BotActivityFeed";
 import { BotStatsPanel, type RuleStatsDto, type BotTradeDto } from "@/components/BotStatsPanel";
+import { BotSuggestionsPanel, type SuggestionDto } from "@/components/BotSuggestionsPanel";
 
 interface ConfigResponse {
   config: BotConfigDto;
@@ -19,21 +20,24 @@ export default function BotPage() {
   const [activity, setActivity] = useState<BotActivityDto[]>([]);
   const [ruleStats, setRuleStats] = useState<RuleStatsDto[]>([]);
   const [recentTrades, setRecentTrades] = useState<BotTradeDto[]>([]);
+  const [suggestions, setSuggestions] = useState<SuggestionDto[]>([]);
   const [killResult, setKillResult] = useState<string | null>(null);
   const [killing, setKilling] = useState(false);
 
   const refresh = useCallback(async () => {
-    const [cfg, r, act, stats] = await Promise.all([
+    const [cfg, r, act, stats, sug] = await Promise.all([
       fetch("/api/bot/config").then((res) => res.json()),
       fetch("/api/bot/rules").then((res) => res.json()),
       fetch("/api/bot/activity").then((res) => res.json()),
       fetch("/api/bot/stats").then((res) => res.json()),
+      fetch("/api/bot/suggestions").then((res) => res.json()),
     ]);
     setConfigRes(cfg);
     setRules(Array.isArray(r) ? r : []);
     setActivity(Array.isArray(act) ? act : []);
     setRuleStats(stats.ruleStats ?? []);
     setRecentTrades(stats.recentTrades ?? []);
+    setSuggestions(Array.isArray(sug) ? sug : []);
   }, []);
 
   useEffect(() => {
@@ -101,6 +105,7 @@ export default function BotPage() {
             />
           )}
           <BotRulesPanel rules={rules} onChanged={refresh} />
+          <BotSuggestionsPanel suggestions={suggestions} ruleNames={ruleNames} onResolved={refresh} />
           <BotStatsPanel ruleStats={ruleStats} recentTrades={recentTrades} ruleNames={ruleNames} />
         </div>
         <div>

@@ -35,13 +35,36 @@ export async function runSim(
   symbol: string,
   opts: { strategy?: StrategyVersion; model?: string } = {},
 ): Promise<BacktestRow | null> {
-  const strategy = opts.strategy ?? getActiveStrategy();
   const bars = await getDailyBars(symbol, 900);
   if (bars.length < MIN_HISTORY_BARS + MIN_FUTURE_BARS + 10) return null;
-
   const minIdx = MIN_HISTORY_BARS;
   const maxIdx = bars.length - 1 - MIN_FUTURE_BARS;
   const asOfIdx = minIdx + Math.floor(Math.random() * (maxIdx - minIdx + 1));
+  return runSimAtIndex(symbol, bars, asOfIdx, opts);
+}
+
+/** Valid random as-of index range for a symbol's bar series, or null when
+ * there isn't enough history. Exposed so the gauntlet can pin a shared date. */
+export function pickAsOfIndex(bars: Bar[]): number | null {
+  if (bars.length < MIN_HISTORY_BARS + MIN_FUTURE_BARS + 10) return null;
+  const minIdx = MIN_HISTORY_BARS;
+  const maxIdx = bars.length - 1 - MIN_FUTURE_BARS;
+  return minIdx + Math.floor(Math.random() * (maxIdx - minIdx + 1));
+}
+
+export async function fetchSimBars(symbol: string): Promise<Bar[]> {
+  return getDailyBars(symbol, 900);
+}
+
+/** Core sim: run one strategy at a FIXED as-of index over already-fetched
+ * bars, grade immediately, and store the backtest row. */
+export async function runSimAtIndex(
+  symbol: string,
+  bars: Bar[],
+  asOfIdx: number,
+  opts: { strategy?: StrategyVersion; model?: string } = {},
+): Promise<BacktestRow | null> {
+  const strategy = opts.strategy ?? getActiveStrategy();
   const truncated = bars.slice(0, asOfIdx + 1);
   const asOf = truncated[truncated.length - 1].ts;
 

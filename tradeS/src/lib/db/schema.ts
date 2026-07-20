@@ -299,6 +299,99 @@ export const translations = sqliteTable("translations", {
   createdAt: integer("created_at").notNull(),
 });
 
+// ---------------------------------------------------------------------------
+// Phase 6: self-improvement.
+// ---------------------------------------------------------------------------
+
+export const lessons = sqliteTable(
+  "lessons",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    predictionId: integer("prediction_id"), // XOR backtestId
+    backtestId: integer("backtest_id"),
+    source: text("source", { enum: ["live", "sim"] }).notNull(),
+    symbol: text("symbol").notNull(),
+    regime: text("regime"),
+    algoVersion: integer("algo_version"),
+    outlook: text("outlook", { enum: ["bullish", "neutral", "bearish"] }).notNull(),
+    confidence: integer("confidence").notNull(),
+    returnPct: real("return_pct").notNull(),
+    directionCorrect: integer("direction_correct", { mode: "boolean" }).notNull(),
+    rootCause: text("root_cause", {
+      enum: [
+        "bad-signal",
+        "missed-catalyst",
+        "regime-blindness",
+        "overconfidence",
+        "underconfidence",
+        "stale-data",
+        "bad-horizon",
+        "crowded-trade",
+        "other",
+      ],
+    }).notNull(),
+    evidence: text("evidence").notNull(), // 2-3 sentences citing numbers
+    ruleOfThumb: text("rule_of_thumb").notNull(), // one actionable line, English
+    model: text("model"),
+    createdAt: integer("created_at").notNull(),
+  },
+  (t) => [
+    index("lessons_cause_created_idx").on(t.rootCause, t.createdAt),
+    index("lessons_prediction_idx").on(t.predictionId),
+    index("lessons_backtest_idx").on(t.backtestId),
+  ],
+);
+
+/** A SEPARATE table on purpose: the bot / track record / calibration / UI
+ * all read `predictions` and must NEVER accidentally trade on an
+ * unvalidated strategy. Graded in place. */
+export const shadowPredictions = sqliteTable(
+  "shadow_predictions",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    symbol: text("symbol").notNull(),
+    createdAt: integer("created_at").notNull(),
+    strategyVersion: integer("strategy_version").notNull(), // the testing version
+    pairedPredictionId: integer("paired_prediction_id"), // champion from the same packet
+    outlook: text("outlook", { enum: ["bullish", "neutral", "bearish"] }).notNull(),
+    confidence: integer("confidence").notNull(),
+    horizonDays: integer("horizon_days").notNull(),
+    thesis: text("thesis").notNull(),
+    model: text("model"),
+    regime: text("regime"),
+    evaluatedAt: integer("evaluated_at"),
+    priceAtPrediction: real("price_at_prediction"),
+    priceAtHorizon: real("price_at_horizon"),
+    returnPct: real("return_pct"),
+    directionCorrect: integer("direction_correct", { mode: "boolean" }),
+    maxDrawdownPct: real("max_drawdown_pct"),
+    maxGainPct: real("max_gain_pct"),
+    neutralBandPct: real("neutral_band_pct"),
+    benchmarkReturnPct: real("benchmark_return_pct"),
+  },
+  (t) => [
+    index("shadow_symbol_created_idx").on(t.symbol, t.createdAt),
+    index("shadow_version_idx").on(t.strategyVersion),
+  ],
+);
+
+/** Rule-advisor parameter tweaks — NEVER auto-applied; a human clicks
+ * Apply (through the normal versioned rule edit) or Dismiss. */
+export const ruleSuggestions = sqliteTable("rule_suggestions", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  ruleId: integer("rule_id"),
+  ruleVersion: integer("rule_version"),
+  suggestedCondition: text("suggested_condition", { mode: "json" }),
+  suggestedAction: text("suggested_action", { mode: "json" }),
+  summary: text("summary").notNull(), // plain grade-6 English
+  evidence: text("evidence", { mode: "json" }),
+  status: text("status", { enum: ["pending", "applied", "dismissed"] })
+    .notNull()
+    .default("pending"),
+  createdAt: integer("created_at").notNull(),
+  resolvedAt: integer("resolved_at"),
+});
+
 export const jobs = sqliteTable(
   "jobs",
   {

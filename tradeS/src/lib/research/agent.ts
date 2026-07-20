@@ -125,5 +125,17 @@ export async function research(symbol: string): Promise<PredictionRow> {
     .returning()
     .all();
 
+  // If a challenger strategy is under test, answer the SAME packet with it
+  // (stored separately, never in `predictions`). Dynamic import avoids a
+  // static import cycle (shadow.ts imports runAnalysis from here).
+  if (parsed.ok) {
+    try {
+      const { runShadow } = await import("./shadow");
+      await runShadow(symbol, packet, row.id, regime);
+    } catch (err) {
+      console.error(`[research] shadow run failed for ${symbol}:`, err);
+    }
+  }
+
   return row;
 }

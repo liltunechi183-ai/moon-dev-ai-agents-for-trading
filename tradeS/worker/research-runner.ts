@@ -17,7 +17,7 @@ const PRIORITY: Array<"chat" | "research" | "postmortem" | "relations"> = [
   "postmortem",
   "relations",
 ];
-const HANDLED = new Set<string>(["chat", "research"]);
+const HANDLED = new Set<string>(["chat", "research", "postmortem"]);
 
 let busy = false;
 
@@ -39,9 +39,86 @@ async function handleJob(job: JobRow): Promise<void> {
     completeJob(job.id, { predictionId: row.id, status: row.status });
     return;
   }
+  if (job.type === "postmortem") {
+    await handlePostmortem(job);
+    return;
+  }
   // A queued job type this phase can't handle yet — fail it loudly rather
   // than looping on it forever.
   failJob(job.id, `no handler for job type "${job.type}" in this build`);
+}
+
+async function handlePostmortem(job: JobRow): Promise<void> {
+  const payload = job.payload as { source: "live" | "sim"; predictionId?: number; backtestId?: number };
+  const { runPostmortem } = await import("@/lib/research/postmortem");
+  const { quantSummaryFor } = await import("./outcome-runner");
+
+  if (payload.source === "live" && payload.predictionId != null) {
+    const [p] = db
+      .select()
+      .from(tables.predictions)
+      .where(eq(tables.predictions.id, payload.predictionId))
+      .limit(1)
+      .all();
+    const [o] = p
+      ? db
+          .select()
+          .from(tables.predictionOutcomes)
+          .where(eq(tables.predictionOutcomes.predictionId, payload.predictionId))
+          .limit(1)
+          .all()
+      : [];
+    if (!p || !o) {
+      completeJob(job.id, { skipped: "prediction or outcome missing" });
+      return;
+    }
+    await runPostmortem({
+      source: "live",
+      predictionId: p.id,
+      symbol: p.symbol,
+      regime: p.regime,
+      algoVersion: p.algoVersion,
+      outlook: p.outlook,
+      confidence: p.confidence,
+      returnPct: o.returnPct,
+      directionCorrect: o.directionCorrect,
+      thesis: p.thesis,
+      risks: p.risks,
+      quantSummary: quantSummaryFor(p.quantSnapshot),
+    });
+    completeJob(job.id, { ok: true });
+    return;
+  }
+
+  if (payload.source === "sim" && payload.backtestId != null) {
+    const [b] = db
+      .select()
+      .from(tables.backtests)
+      .where(eq(tables.backtests.id, payload.backtestId))
+      .limit(1)
+      .all();
+    if (!b) {
+      completeJob(job.id, { skipped: "backtest missing" });
+      return;
+    }
+    await runPostmortem({
+      source: "sim",
+      backtestId: b.id,
+      symbol: b.symbol,
+      regime: b.regime,
+      algoVersion: b.algoVersion,
+      outlook: b.outlook,
+      confidence: b.confidence,
+      returnPct: b.returnPct,
+      directionCorrect: b.directionCorrect,
+      thesis: b.thesis,
+      quantSummary: quantSummaryFor(b.quantSnapshot),
+    });
+    completeJob(job.id, { ok: true });
+    return;
+  }
+
+  completeJob(job.id, { skipped: "bad postmortem payload" });
 }
 
 async function pollOnce(): Promise<void> {

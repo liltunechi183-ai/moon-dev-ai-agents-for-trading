@@ -15,6 +15,10 @@ async function main() {
   const { rebuildBotTrades } = await import("@/lib/bot/ledger");
   const { startBacktestRunner } = await import("./backtest-runner");
   const { startTranslateRunner } = await import("./translate-runner");
+  const { startGauntletRunner } = await import("./gauntlet-runner");
+  const { startStrategistRunner } = await import("./strategist-runner");
+  const { startCatchup } = await import("./catchup");
+  const { startImproveRunner } = await import("./improve-runner");
 
   console.log(
     `[worker] booting — paper=${env.paper} hasAlpacaKeys=${env.hasAlpacaKeys} db=${env.databasePath}`,
@@ -30,6 +34,10 @@ async function main() {
   startBotRunner();
   startBacktestRunner();
   startTranslateRunner();
+  startGauntletRunner();
+  startStrategistRunner();
+  startImproveRunner();
+  startCatchup();
 
   console.log("[worker] all runners started");
 }

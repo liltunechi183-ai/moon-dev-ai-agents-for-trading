@@ -1,6 +1,7 @@
 import cron from "node-cron";
-import { claimNextJob, completeJob, failJob } from "@/lib/jobs";
+import { claimNextJob, completeJob, enqueueJob, failJob } from "@/lib/jobs";
 import { runSim, pickSimSymbol } from "@/lib/research/backtest";
+import { deservesPostmortem } from "@/lib/research/postmortem";
 
 const NIGHTLY_SIMS = 5;
 const POLL_MS = 5000;
@@ -18,6 +19,9 @@ async function runAmbientSims(count = NIGHTLY_SIMS): Promise<number> {
         console.log(
           `[backtest-runner] ${symbol} sim: ${row.outlook} ${row.confidence}/10 → ${row.directionCorrect ? "✓" : "✗"} (${row.returnPct.toFixed(1)}%)`,
         );
+        if (deservesPostmortem(row.directionCorrect, row.confidence)) {
+          enqueueJob("postmortem", { source: "sim", backtestId: row.id });
+        }
       }
     } catch (err) {
       console.error(`[backtest-runner] sim failed for ${symbol}:`, err);

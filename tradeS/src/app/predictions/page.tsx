@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { PredictionCard } from "@/components/PredictionCard";
 import { AccuracyPanel } from "@/components/AccuracyPanel";
+import { LessonsFeed } from "@/components/LessonsFeed";
 import type { AccuracyDto, PredictionListItem } from "@/lib/predictions-types";
 
 export default function PredictionsPage() {
@@ -35,6 +36,8 @@ export default function PredictionsPage() {
       </div>
 
       {accuracy && <AccuracyPanel stats={accuracy} />}
+
+      <LessonsFeed />
 
       {loading && <p className="text-sm text-zinc-500">Loading…</p>}
 

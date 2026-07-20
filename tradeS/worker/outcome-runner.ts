@@ -9,6 +9,9 @@ import {
   gradeDirection,
   neutralBandFor,
 } from "@/lib/research/grading";
+import { deservesPostmortem } from "@/lib/research/postmortem";
+import { enqueueJob } from "@/lib/jobs";
+import { renderQuantBullets } from "@/lib/research/packet";
 import type { Bar } from "@/lib/quant/types";
 
 const DAY_MS = 86_400_000;
@@ -20,7 +23,7 @@ async function fetchBarsCovering(symbol: string, sinceTs: number): Promise<Bar[]
   return bars;
 }
 
-/** Grade every matured, ungraded prediction. Returns how many were graded. */
+/** Grade every matured, ungraded prediction + enqueue post-mortems. */
 export async function gradeMaturedPredictions(): Promise<number> {
   const now = Date.now();
   const candidates = db
@@ -29,6 +32,7 @@ export async function gradeMaturedPredictions(): Promise<number> {
       symbol: tables.predictions.symbol,
       createdAt: tables.predictions.createdAt,
       outlook: tables.predictions.outlook,
+      confidence: tables.predictions.confidence,
       horizonDays: tables.predictions.horizonDays,
       quantSnapshot: tables.predictions.quantSnapshot,
     })
@@ -40,7 +44,6 @@ export async function gradeMaturedPredictions(): Promise<number> {
 
   if (candidates.length === 0) return 0;
 
-  // One SPY series per pass for the benchmark column.
   const oldestEntry = Math.min(...candidates.map((c) => c.createdAt));
   let spyBars: Bar[] = [];
   try {
@@ -61,14 +64,13 @@ export async function gradeMaturedPredictions(): Promise<number> {
       }
       const horizonTs = p.createdAt + p.horizonDays * DAY_MS;
       const window = extractGradingWindow(bars, p.createdAt, horizonTs);
-      if (!window) continue; // trading days haven't covered the horizon yet — try tomorrow
+      if (!window) continue; // horizon not covered yet — try tomorrow
 
       const atrPct = p.quantSnapshot?.indicators?.atrPct ?? null;
       const band = neutralBandFor(atrPct, p.horizonDays);
       const path = computePathStats(window.entryPrice, window.pathCloses);
-      const benchmark = spyBars.length
-        ? extractGradingWindow(spyBars, p.createdAt, horizonTs)
-        : null;
+      const benchmark = spyBars.length ? extractGradingWindow(spyBars, p.createdAt, horizonTs) : null;
+      const directionCorrect = gradeDirection(p.outlook, window.returnPct, band);
 
       db.insert(tables.predictionOutcomes)
         .values({
@@ -77,7 +79,7 @@ export async function gradeMaturedPredictions(): Promise<number> {
           priceAtPrediction: window.entryPrice,
           priceAtHorizon: window.horizonPrice,
           returnPct: window.returnPct,
-          directionCorrect: gradeDirection(p.outlook, window.returnPct, band),
+          directionCorrect,
           maxDrawdownPct: path.maxDrawdownPct,
           maxGainPct: path.maxGainPct,
           neutralBandPct: band,
@@ -86,6 +88,10 @@ export async function gradeMaturedPredictions(): Promise<number> {
         .onConflictDoNothing()
         .run();
       graded++;
+
+      if (deservesPostmortem(directionCorrect, p.confidence)) {
+        enqueueJob("postmortem", { source: "live", predictionId: p.id });
+      }
     } catch (err) {
       console.error(`[outcome-runner] grading failed for ${p.symbol} (prediction ${p.id}):`, err);
     }
@@ -95,17 +101,90 @@ export async function gradeMaturedPredictions(): Promise<number> {
   return graded;
 }
 
+/** Grade matured shadow predictions in place. */
+export async function gradeMaturedShadows(): Promise<number> {
+  const now = Date.now();
+  const candidates = db
+    .select()
+    .from(tables.shadowPredictions)
+    .where(isNull(tables.shadowPredictions.evaluatedAt))
+    .all()
+    .filter((s) => s.createdAt + s.horizonDays * DAY_MS <= now);
+
+  if (candidates.length === 0) return 0;
+
+  const oldestEntry = Math.min(...candidates.map((c) => c.createdAt));
+  let spyBars: Bar[] = [];
+  try {
+    spyBars = await fetchBarsCovering("SPY", oldestEntry);
+  } catch {
+    // benchmark optional
+  }
+
+  let graded = 0;
+  const barsCache = new Map<string, Bar[]>();
+  for (const s of candidates) {
+    try {
+      let bars = barsCache.get(s.symbol);
+      if (!bars) {
+        bars = await fetchBarsCovering(s.symbol, s.createdAt);
+        barsCache.set(s.symbol, bars);
+      }
+      const horizonTs = s.createdAt + s.horizonDays * DAY_MS;
+      const window = extractGradingWindow(bars, s.createdAt, horizonTs);
+      if (!window) continue;
+
+      // Reuse the paired champion's ATR for the band when available.
+      const band = neutralBandFor(null, s.horizonDays);
+      const path = computePathStats(window.entryPrice, window.pathCloses);
+      const benchmark = spyBars.length ? extractGradingWindow(spyBars, s.createdAt, horizonTs) : null;
+
+      db.update(tables.shadowPredictions)
+        .set({
+          evaluatedAt: now,
+          priceAtPrediction: window.entryPrice,
+          priceAtHorizon: window.horizonPrice,
+          returnPct: window.returnPct,
+          directionCorrect: gradeDirection(s.outlook, window.returnPct, band),
+          maxDrawdownPct: path.maxDrawdownPct,
+          maxGainPct: path.maxGainPct,
+          neutralBandPct: band,
+          benchmarkReturnPct: benchmark?.returnPct ?? null,
+        })
+        .where(eq(tables.shadowPredictions.id, s.id))
+        .run();
+      graded++;
+    } catch (err) {
+      console.error(`[outcome-runner] shadow grading failed for ${s.symbol} (${s.id}):`, err);
+    }
+  }
+  if (graded > 0) console.log(`[outcome-runner] graded ${graded} shadow prediction(s)`);
+  return graded;
+}
+
+async function runAllGrading(): Promise<void> {
+  await gradeMaturedPredictions();
+  await gradeMaturedShadows();
+}
+
 export function startOutcomeRunner(): void {
   cron.schedule(
     "30 18 * * 1-5",
     () => {
-      gradeMaturedPredictions().catch((err) => console.error("[outcome-runner] failed:", err));
+      runAllGrading().catch((err) => console.error("[outcome-runner] failed:", err));
     },
     { timezone: "America/New_York" },
   );
 
-  // One pass shortly after boot (the laptop may have slept through the cron).
   setTimeout(() => {
-    gradeMaturedPredictions().catch((err) => console.error("[outcome-runner] boot pass failed:", err));
+    runAllGrading().catch((err) => console.error("[outcome-runner] boot pass failed:", err));
   }, 30_000);
+}
+
+/** Exposed for the postmortem job handler to build its quant summary. */
+export function quantSummaryFor(
+  quantSnapshot: { indicators: import("@/lib/quant/types").IndicatorSnapshot; patterns: import("@/lib/quant/patterns").Pattern[] } | null,
+): string {
+  if (!quantSnapshot) return "No technical snapshot was stored.";
+  return renderQuantBullets(quantSnapshot.indicators, quantSnapshot.patterns);
 }

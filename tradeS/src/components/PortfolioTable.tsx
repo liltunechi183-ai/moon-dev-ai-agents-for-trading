@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { Quote } from "@/hooks/useQuoteStream";
+import { useI18n } from "@/lib/i18n/provider";
 
 export interface Holding {
   id: number;
@@ -25,6 +26,7 @@ export function PortfolioTable({
   quotes: Record<string, Quote>;
   onDelete: (id: number) => void;
 }) {
+  const { t } = useI18n();
   const prevPrices = useRef<Record<string, number>>({});
   const [flash, setFlash] = useState<Record<string, "up" | "down" | undefined>>({});
 
@@ -41,13 +43,13 @@ export function PortfolioTable({
     }
     if (Object.keys(nextFlash).length) {
       setFlash(nextFlash);
-      const t = setTimeout(() => setFlash({}), 700);
-      return () => clearTimeout(t);
+      const timer = setTimeout(() => setFlash({}), 700);
+      return () => clearTimeout(timer);
     }
   }, [quotes, holdings]);
 
   if (holdings.length === 0) {
-    return <p className="text-sm text-zinc-500">No holdings yet. Add one below.</p>;
+    return <p className="text-sm text-zinc-500">{t("dashboard.noHoldings")}</p>;
   }
 
   return (

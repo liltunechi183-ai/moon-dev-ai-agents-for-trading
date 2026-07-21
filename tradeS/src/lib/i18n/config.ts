@@ -9,6 +9,7 @@
  */
 export const SUPPORTED_LANGUAGES: Array<{ code: string; label: string }> = [
   { code: "en", label: "EN" },
+  { code: "es", label: "ES" },
 ];
 
 export const BASE_LANGUAGE = SUPPORTED_LANGUAGES[0].code;

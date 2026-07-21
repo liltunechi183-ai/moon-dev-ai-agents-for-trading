@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { Quote } from "@/hooks/useQuoteStream";
+import { useI18n } from "@/lib/i18n/provider";
 
 export interface WatchlistItem {
   symbol: string;
@@ -17,8 +18,9 @@ export function WatchlistTable({
   quotes: Record<string, Quote>;
   onDelete: (symbol: string) => void;
 }) {
+  const { t } = useI18n();
   if (items.length === 0) {
-    return <p className="text-sm text-zinc-500">Nothing on the watchlist yet.</p>;
+    return <p className="text-sm text-zinc-500">{t("dashboard.noWatchlist")}</p>;
   }
 
   return (

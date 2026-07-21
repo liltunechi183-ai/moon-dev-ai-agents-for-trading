@@ -4,9 +4,11 @@ import { useCallback, useEffect, useState } from "react";
 import { PredictionCard } from "@/components/PredictionCard";
 import { AccuracyPanel } from "@/components/AccuracyPanel";
 import { LessonsFeed } from "@/components/LessonsFeed";
+import { useI18n } from "@/lib/i18n/provider";
 import type { AccuracyDto, PredictionListItem } from "@/lib/predictions-types";
 
 export default function PredictionsPage() {
+  const { t } = useI18n();
   const [items, setItems] = useState<PredictionListItem[]>([]);
   const [accuracy, setAccuracy] = useState<AccuracyDto | null>(null);
   const [loading, setLoading] = useState(true);
@@ -28,23 +30,18 @@ export default function PredictionsPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-lg font-semibold text-zinc-100">Predictions</h1>
-        <p className="text-xs text-zinc-500">
-          Decision-support research only — not financial advice. Every call is stored and graded
-          against what the price actually did.
-        </p>
+        <h1 className="text-lg font-semibold text-zinc-100">{t("predictions.title")}</h1>
+        <p className="text-xs text-zinc-500">{t("predictions.subtitle")}</p>
       </div>
 
       {accuracy && <AccuracyPanel stats={accuracy} />}
 
       <LessonsFeed />
 
-      {loading && <p className="text-sm text-zinc-500">Loading…</p>}
+      {loading && <p className="text-sm text-zinc-500">{t("common.loading")}</p>}
 
       {!loading && items.length === 0 && (
-        <p className="text-sm text-zinc-500">
-          Nothing tracked yet — add holdings or watchlist tickers on the Dashboard first.
-        </p>
+        <p className="text-sm text-zinc-500">{t("predictions.nothingTracked")}</p>
       )}
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">

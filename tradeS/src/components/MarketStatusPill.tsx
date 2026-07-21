@@ -1,12 +1,15 @@
 "use client";
 
 import type { ClockState } from "@/hooks/useQuoteStream";
+import { useI18n } from "@/lib/i18n/provider";
 
 export function MarketStatusPill({ clock }: { clock: ClockState }) {
+  const { t } = useI18n();
+
   if (clock.isOpen === null) {
     return (
       <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs text-zinc-500">
-        Market status unknown
+        {t("common.marketStatusUnknown")}
       </span>
     );
   }
@@ -18,7 +21,7 @@ export function MarketStatusPill({ clock }: { clock: ClockState }) {
           : "border-white/10 bg-white/[0.03] text-zinc-400"
       }`}
     >
-      {clock.isOpen ? "Market open" : "Market closed"}
+      {clock.isOpen ? t("common.marketOpen") : t("common.marketClosed")}
     </span>
   );
 }

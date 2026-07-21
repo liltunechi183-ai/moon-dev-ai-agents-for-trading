@@ -6,6 +6,7 @@ import { PositionsTable, type PositionDto } from "@/components/PositionsTable";
 import { OrdersTable, type OrderRowDto } from "@/components/OrdersTable";
 import { EquityCurve, type EquityPoint } from "@/components/EquityCurve";
 import { FundsPanel, SetupPanel } from "@/components/FundsPanel";
+import { useI18n } from "@/lib/i18n/provider";
 
 interface AccountInfo {
   hasKeys: boolean;
@@ -21,6 +22,7 @@ interface AccountInfo {
 const POLL_MS = 15_000;
 
 export default function TradePage() {
+  const { t } = useI18n();
   const [info, setInfo] = useState<AccountInfo | null>(null);
   const [positions, setPositions] = useState<PositionDto[]>([]);
   const [orders, setOrders] = useState<OrderRowDto[]>([]);
@@ -59,9 +61,9 @@ export default function TradePage() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-lg font-semibold text-zinc-100">Trade</h1>
+        <h1 className="text-lg font-semibold text-zinc-100">{t("trade.title")}</h1>
         <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-amber-500">
-          Paper trading
+          {t("trade.paperBadge")}
         </span>
       </div>
 
@@ -70,9 +72,9 @@ export default function TradePage() {
       {acct && (
         <div className="flex flex-wrap gap-6 rounded-lg border border-white/10 bg-white/[0.02] p-4">
           {[
-            { label: "Equity", value: `$${acct.equity.toLocaleString()}` },
-            { label: "Cash", value: `$${acct.cash.toLocaleString()}` },
-            { label: "Buying power", value: `$${acct.buyingPower.toLocaleString()}` },
+            { label: t("trade.equity"), value: `$${acct.equity.toLocaleString()}` },
+            { label: t("trade.cash"), value: `$${acct.cash.toLocaleString()}` },
+            { label: t("trade.buyingPower"), value: `$${acct.buyingPower.toLocaleString()}` },
           ].map((s) => (
             <div key={s.label}>
               <div className="text-[10px] uppercase tracking-wide text-zinc-500">{s.label}</div>
@@ -80,7 +82,7 @@ export default function TradePage() {
             </div>
           ))}
           <div>
-            <div className="text-[10px] uppercase tracking-wide text-zinc-500">Day change</div>
+            <div className="text-[10px] uppercase tracking-wide text-zinc-500">{t("trade.dayChange")}</div>
             <div
               className={`text-lg font-semibold tabular-nums ${
                 dayChange === null
@@ -104,7 +106,7 @@ export default function TradePage() {
         <div className="flex flex-col gap-4 lg:col-span-2">
           <section>
             <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">
-              Equity curve
+              {t("trade.equityCurve")}
             </h2>
             <div className="rounded-lg border border-white/10 bg-white/[0.02] p-2">
               <EquityCurve points={equity} />
@@ -112,13 +114,13 @@ export default function TradePage() {
           </section>
           <section>
             <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">
-              Positions
+              {t("trade.positions")}
             </h2>
             <PositionsTable positions={positions} onClose={setPrefill} />
           </section>
           <section>
             <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">
-              Orders
+              {t("trade.orders")}
             </h2>
             <OrdersTable orders={orders} onCancel={cancelOrder} />
           </section>

@@ -6,6 +6,7 @@ import { BotRulesPanel, type BotRuleDto } from "@/components/BotRulesPanel";
 import { BotActivityFeed, type BotActivityDto } from "@/components/BotActivityFeed";
 import { BotStatsPanel, type RuleStatsDto, type BotTradeDto } from "@/components/BotStatsPanel";
 import { BotSuggestionsPanel, type SuggestionDto } from "@/components/BotSuggestionsPanel";
+import { useI18n } from "@/lib/i18n/provider";
 
 interface ConfigResponse {
   config: BotConfigDto;
@@ -15,6 +16,7 @@ interface ConfigResponse {
 }
 
 export default function BotPage() {
+  const { t } = useI18n();
   const [configRes, setConfigRes] = useState<ConfigResponse | null>(null);
   const [rules, setRules] = useState<BotRuleDto[]>([]);
   const [activity, setActivity] = useState<BotActivityDto[]>([]);
@@ -49,12 +51,12 @@ export default function BotPage() {
   }, [refresh]);
 
   async function kill() {
-    if (!window.confirm("Kill the bot? This disables it and cancels its open parent orders.")) return;
+    if (!window.confirm(t("bot.killConfirm"))) return;
     setKilling(true);
     try {
       const res = await fetch("/api/bot/kill", { method: "POST" });
       const data = await res.json();
-      setKillResult(`Bot disabled. Canceled ${data.canceledOrders} open order(s).`);
+      setKillResult(t("bot.killResult", { n: data.canceledOrders }));
       refresh();
     } finally {
       setKilling(false);
@@ -67,7 +69,7 @@ export default function BotPage() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-lg font-semibold text-zinc-100">Bot</h1>
+        <h1 className="text-lg font-semibold text-zinc-100">{t("bot.title")}</h1>
         <span
           className={`rounded-full border px-3 py-1 text-xs font-semibold ${
             enabled
@@ -75,23 +77,21 @@ export default function BotPage() {
               : "border-white/15 bg-white/[0.04] text-zinc-400"
           }`}
         >
-          {enabled ? "RUNNING (checks every 5 min in market hours)" : "STOPPED"}
+          {enabled ? t("bot.running") : t("bot.stopped")}
         </span>
         <button
           onClick={kill}
           disabled={killing}
           className="ml-auto rounded-md border-2 border-[#ef4444] bg-[#ef4444]/15 px-5 py-2 text-sm font-bold uppercase tracking-wide text-[#ef4444] hover:bg-[#ef4444]/30 disabled:opacity-50"
         >
-          {killing ? "Killing…" : "Kill switch"}
+          {killing ? t("bot.killing") : t("bot.killSwitch")}
         </button>
       </div>
 
       {killResult && <p className="text-xs text-amber-500">{killResult}</p>}
 
       <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-zinc-400">
-        The bot trades the <b className="text-amber-500">paper account</b> only, with fake money.
-        It gates on the calibrated (earned) confidence, uses server-side stop-losses, and every
-        decision — including blocked ones — is logged below. Research only, not financial advice.
+        {t("bot.safetyBanner")}
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -110,7 +110,7 @@ export default function BotPage() {
         </div>
         <div>
           <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">
-            Activity
+            {t("bot.activity")}
           </h2>
           <BotActivityFeed activity={activity} />
         </div>

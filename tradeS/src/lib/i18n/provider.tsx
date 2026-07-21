@@ -11,16 +11,26 @@ type Dict = Record<string, string>;
 // so a partial or missing dictionary degrades gracefully.
 const BASE_DICT: Dict = { ...enCommon };
 
+type TranslateVars = Record<string, string | number>;
+
 interface I18nContextValue {
   lang: string;
   setLang: (code: string) => void;
-  t: (key: string) => string;
+  /** Looks up `key`; optional `vars` fill `{placeholders}` in the string. */
+  t: (key: string, vars?: TranslateVars) => string;
+}
+
+function applyVars(template: string, vars?: TranslateVars): string {
+  if (!vars) return template;
+  return template.replace(/\{(\w+)\}/g, (match, name) =>
+    name in vars ? String(vars[name]) : match,
+  );
 }
 
 const I18nContext = createContext<I18nContextValue>({
   lang: BASE_LANGUAGE,
   setLang: () => {},
-  t: (key) => BASE_DICT[key] ?? key,
+  t: (key, vars) => applyVars(BASE_DICT[key] ?? key, vars),
 });
 
 const STORAGE_KEY = "trades.lang";
@@ -53,7 +63,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const t = useCallback(
-    (key: string) => dict[key] ?? BASE_DICT[key] ?? key,
+    (key: string, vars?: TranslateVars) => applyVars(dict[key] ?? BASE_DICT[key] ?? key, vars),
     [dict],
   );
 

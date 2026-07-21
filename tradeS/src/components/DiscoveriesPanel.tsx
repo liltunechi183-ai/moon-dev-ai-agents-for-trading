@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useI18n } from "@/lib/i18n/provider";
 
 interface Discovery {
   id: number;
@@ -41,6 +42,7 @@ const ANGLE_STYLES: Record<string, string> = {
 };
 
 export function DiscoveriesPanel() {
+  const { t } = useI18n();
   const [pending, setPending] = useState<Discovery[]>([]);
   const [resolved, setResolved] = useState<Discovery[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
@@ -111,18 +113,15 @@ export function DiscoveriesPanel() {
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold text-zinc-100">Discoveries</h1>
-          <p className="max-w-2xl text-xs text-zinc-500">
-            Claude hunts for small, overlooked US stocks tied to fresh news. Nothing is followed
-            until you approve it. Research only — not financial advice.
-          </p>
+          <h1 className="text-lg font-semibold text-zinc-100">{t("discoveries.title")}</h1>
+          <p className="max-w-2xl text-xs text-zinc-500">{t("discoveries.subtitle")}</p>
         </div>
         <button
           onClick={scanNow}
           disabled={scanJob !== null}
           className="rounded-md bg-[#38bdf8]/15 px-4 py-2 text-sm font-medium text-[#38bdf8] hover:bg-[#38bdf8]/25 disabled:opacity-50"
         >
-          {scanJob !== null ? `Scanning… ${scanElapsed}s` : "Scan now"}
+          {scanJob !== null ? t("discoveries.scanning", { s: scanElapsed }) : t("discoveries.scanNow")}
         </button>
       </div>
 
@@ -139,7 +138,7 @@ export function DiscoveriesPanel() {
         </div>
       )}
 
-      {pending.length === 0 && <p className="text-sm text-zinc-500">No pending picks. Run a scan to hunt.</p>}
+      {pending.length === 0 && <p className="text-sm text-zinc-500">{t("discoveries.noPending")}</p>}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {pending.map((d) => (

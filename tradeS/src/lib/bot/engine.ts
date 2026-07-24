@@ -10,6 +10,7 @@ import { evaluateRule, RuleActionSchema, RuleConditionSchema, type RuleAction, t
 import { checkSafeguards } from "./safeguards";
 import { computeBudgetNotional } from "./sizing";
 import { getBotConfig, isLiveAckValid, disableBot, type BotConfigValues } from "./config";
+import { notify } from "./notify";
 
 interface PositionInfo {
   symbol: string;
@@ -215,7 +216,10 @@ async function tryBuy(
   });
   if (!guard.ok) {
     logActivity({ ruleId: rule.id, ruleVersion: rule.version, symbol, decision: guard.halt ? "halt" : "blocked", reason: guard.reason });
-    if (guard.halt) disableBot(`circuit breaker: ${guard.reason}`);
+    if (guard.halt) {
+      disableBot(`circuit breaker: ${guard.reason}`);
+      notify({ kind: "halt", symbol, reason: `circuit breaker: ${guard.reason}` });
+    }
     return;
   }
 
@@ -236,12 +240,14 @@ async function tryBuy(
     take_profit: { limit_price: String(takeProfitPrice) },
   });
   insertOrderWithLegs(order, "bot");
+  const buyReason = `rule matched; bought ${sizing.shares} shares (~$${sizing.notionalUsd.toFixed(0)}) with ${action.stopLossPct}% stop`;
+  notify({ kind: "buy", symbol, reason: buyReason });
   logActivity({
     ruleId: rule.id,
     ruleVersion: rule.version,
     symbol,
     decision: "buy",
-    reason: `rule matched; bought ${sizing.shares} shares (~$${sizing.notionalUsd.toFixed(0)}) with ${action.stopLossPct}% stop`,
+    reason: buyReason,
     orderId: order.id,
     snapshot: {
       rule: { condition, action },
@@ -271,13 +277,17 @@ async function trySell(
   });
   if (!guard.ok) {
     logActivity({ ruleId: rule.id, ruleVersion: rule.version, symbol, decision: guard.halt ? "halt" : "blocked", reason: guard.reason });
-    if (guard.halt) disableBot(`circuit breaker: ${guard.reason}`);
+    if (guard.halt) {
+      disableBot(`circuit breaker: ${guard.reason}`);
+      notify({ kind: "halt", symbol, reason: `circuit breaker: ${guard.reason}` });
+    }
     return;
   }
 
   // Close the whole position; cancel_orders drops the bracket legs first.
   const order = await alpaca.closePosition(symbol, true);
   insertOrderWithLegs(order, "bot");
+  notify({ kind: "sell", symbol, reason: "sell rule matched; closed the whole position" });
   logActivity({
     ruleId: rule.id,
     ruleVersion: rule.version,
@@ -382,6 +392,7 @@ export async function runBotTick(): Promise<void> {
  * position. Returns how many orders were canceled. */
 export async function killBot(): Promise<number> {
   disableBot("kill switch pressed");
+  notify({ kind: "halt", reason: "kill switch pressed" });
   if (!env.hasAlpacaKeys) return 0;
 
   const open = db

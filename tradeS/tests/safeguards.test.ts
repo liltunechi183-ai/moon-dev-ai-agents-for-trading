@@ -88,6 +88,20 @@ describe("checkSafeguards", () => {
     expect(res.ok).toBe(false);
   });
 
+  it("regression: never blocks a sell (orderNotionalUsd=0) even when current exposure already exceeds the cap", () => {
+    // A position that grew past the per-stock cap purely from price
+    // appreciation must still be closeable — the caps only gate NEW exposure.
+    const perSymbol = checkSafeguards(
+      input({ symbolExposureUsd: 5000, maxPositionUsd: 2000, orderNotionalUsd: 0 }),
+    );
+    expect(perSymbol.ok).toBe(true);
+
+    const total = checkSafeguards(
+      input({ totalExposureUsd: 50_000, maxTotalExposureUsd: 10_000, orderNotionalUsd: 0 }),
+    );
+    expect(total.ok).toBe(true);
+  });
+
   it("enforces the orders-per-day cap", () => {
     const res = checkSafeguards(input({ ordersToday: 10 }));
     expect(res.ok).toBe(false);

@@ -35,6 +35,11 @@ Open http://localhost:3100. With **no keys at all** the app still works on
 delayed Yahoo data (no trading). Add free Alpaca **paper** keys to enable
 live US quotes and paper trading.
 
+Not sure something's set up right? Run `npm run doctor` — it checks your
+Node version, dependencies, `.env.local`, Alpaca keys, and whether the
+database is migrated, then prints exactly what's missing and the command to
+fix it.
+
 **Never set `ANTHROPIC_API_KEY`** — the AI engine runs on the machine's
 Claude Code login; that env var silently switches the SDK to per-token API
 billing. `guardAnthropicKey()` deletes it at worker boot.
@@ -48,6 +53,7 @@ billing. `guardAnthropicKey()` deletes it at worker boot.
 | `npm run build` / `npm start` | production build / serve on :3100 |
 | `npm test` | Vitest unit suites (the pure logic) |
 | `npm run db:generate` / `npm run db:migrate` | Drizzle migrations |
+| `npm run doctor` | checks your setup (Node, deps, env, keys, DB) and tells you what to fix |
 | `npx tsx scripts/research-once.ts AAPL` | one research run from the terminal |
 | `npx tsx scripts/strategist-once.ts` | run the self-improvement strategist once |
 

@@ -77,20 +77,24 @@ export function checkSafeguards(input: SafeguardInput): SafeguardResult {
     }
   }
 
-  // 5. Per-symbol cap.
-  if (input.symbolExposureUsd + input.orderNotionalUsd > input.maxPositionUsd) {
-    return {
-      ok: false,
-      reason: `order would push this symbol's exposure past the $${input.maxPositionUsd} per-stock cap`,
-    };
-  }
+  // 5 & 6. Exposure caps — only gate orders that ADD exposure (orderNotionalUsd
+  // > 0). A sell (orderNotionalUsd === 0) always reduces exposure, so it must
+  // never be blocked by these caps — otherwise a position that grew past the
+  // cap purely from price appreciation could never be closed.
+  if (input.orderNotionalUsd > 0) {
+    if (input.symbolExposureUsd + input.orderNotionalUsd > input.maxPositionUsd) {
+      return {
+        ok: false,
+        reason: `order would push this symbol's exposure past the $${input.maxPositionUsd} per-stock cap`,
+      };
+    }
 
-  // 6. Total exposure cap.
-  if (input.totalExposureUsd + input.orderNotionalUsd > input.maxTotalExposureUsd) {
-    return {
-      ok: false,
-      reason: `order would push total exposure past the $${input.maxTotalExposureUsd} cap`,
-    };
+    if (input.totalExposureUsd + input.orderNotionalUsd > input.maxTotalExposureUsd) {
+      return {
+        ok: false,
+        reason: `order would push total exposure past the $${input.maxTotalExposureUsd} cap`,
+      };
+    }
   }
 
   // 7. Orders-per-day cap.

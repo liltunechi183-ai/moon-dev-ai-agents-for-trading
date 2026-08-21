@@ -1,8 +1,9 @@
 import { and, eq } from "drizzle-orm";
 import { db, tables } from "@/lib/db";
 import { runAnalysis } from "./agent";
+import { FAST_MODEL } from "@/lib/models";
 
-export const POSTMORTEM_MODEL = "claude-haiku-4-5";
+export const POSTMORTEM_MODEL = FAST_MODEL;
 
 const ROOT_CAUSES = [
   "bad-signal",

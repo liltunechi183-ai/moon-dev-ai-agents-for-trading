@@ -4,8 +4,9 @@ import { runAnalysis } from "@/lib/research/agent";
 import { getActiveStrategy, listStrategyVersions } from "@/lib/research/strategy";
 import { computeAccuracy, loadGradedRows } from "@/lib/research/accuracy";
 import { checkStrategistGate, validateProposal, type LessonCluster } from "./strategist";
+import { REASONING_MODEL } from "@/lib/models";
 
-export const STRATEGIST_MODEL = "claude-fable-5";
+export const STRATEGIST_MODEL = REASONING_MODEL;
 
 function loadLessonClusters(): { clusters: LessonCluster[]; total: number } {
   const lessons = db.select().from(tables.lessons).all();

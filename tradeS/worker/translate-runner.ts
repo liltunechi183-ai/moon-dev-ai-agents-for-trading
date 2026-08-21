@@ -1,8 +1,9 @@
 import { claimNextJob, completeJob, failJob } from "@/lib/jobs";
 import { runAnalysis } from "@/lib/research/agent";
 import { storeTranslation, getCachedTranslation } from "@/lib/i18n/translate";
+import { FAST_MODEL } from "@/lib/models";
 
-const TRANSLATE_MODEL = "claude-haiku-4-5";
+const TRANSLATE_MODEL = FAST_MODEL;
 const POLL_MS = 5000;
 
 let busy = false;

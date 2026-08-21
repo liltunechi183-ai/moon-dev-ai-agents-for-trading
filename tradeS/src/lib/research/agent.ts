@@ -7,7 +7,9 @@ import { getActiveStrategy } from "./strategy";
 import { buildTrackRecord } from "./calibration";
 import { getCurrentRegime } from "./regime";
 
-export const ANALYST_MODEL = "claude-opus-4-8";
+import { REASONING_MODEL } from "@/lib/models";
+
+export const ANALYST_MODEL = REASONING_MODEL;
 
 export interface AnalysisRun {
   resultText: string;

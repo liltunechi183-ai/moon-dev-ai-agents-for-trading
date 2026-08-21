@@ -6,8 +6,9 @@ import { parsePrediction } from "./schema";
 import { buildTrackRecord, effectiveConfidence } from "./calibration";
 import { getActiveStrategy, renderFullStrategy } from "./strategy";
 import { getCurrentRegime } from "./regime";
+import { REASONING_MODEL } from "@/lib/models";
 
-export const CHALLENGE_MODEL = "claude-fable-5";
+export const CHALLENGE_MODEL = REASONING_MODEL;
 
 const CHALLENGE_SYSTEM = `You are the research analyst whose stock prediction is being challenged by
 the user. Argue honestly, not defensively.

@@ -3,8 +3,9 @@ import { db, tables } from "@/lib/db";
 import { runAnalysis } from "@/lib/research/agent";
 import { getRuleStats } from "@/lib/bot/ledger";
 import { RuleConditionSchema, RuleActionSchema } from "@/lib/bot/rules";
+import { FAST_MODEL } from "@/lib/models";
 
-export const RULE_ADVISOR_MODEL = "claude-haiku-4-5";
+export const RULE_ADVISOR_MODEL = FAST_MODEL;
 
 const MIN_ROUND_TRIPS = 10;
 

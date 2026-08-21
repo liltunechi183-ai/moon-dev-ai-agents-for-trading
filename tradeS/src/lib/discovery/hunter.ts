@@ -11,13 +11,11 @@ import { parseDiscovery, type DiscoveryPick } from "./schema";
 import { filterPicks } from "./dedupe";
 import { getCommodityBlock } from "./commodities";
 import { DISCOVERY_SYSTEM, buildScanPrompt } from "./prompts";
-import { ANALYST_MODEL } from "@/lib/research/agent";
+import { REASONING_MODEL } from "@/lib/models";
 
-// Uses the same model as the prediction analyst rather than a separate
-// preview model — the discovery scan is a long, tool-heavy run (up to 40
-// turns of WebSearch/WebFetch) and previews can carry their own, much
-// smaller usage-credit pool that runs out well before the main plan does.
-export const DISCOVERY_MODEL = ANALYST_MODEL;
+// The scan is a long, tool-heavy run (up to 40 turns of WebSearch/WebFetch),
+// so it gets the deep-reasoning model. See src/lib/models.ts.
+export const DISCOVERY_MODEL = REASONING_MODEL;
 const MIN_BARS_SANITY = 30;
 const RECENT_THEME_LOOKBACK = 8;
 const SURFACE_LOOKBACK_DAYS = 90;

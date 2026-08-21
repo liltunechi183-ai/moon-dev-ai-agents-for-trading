@@ -1,4 +1,4 @@
-import "dotenv/config";
+import "@/lib/load-env";
 
 async function main() {
   // guardAnthropicKey() must run before anything AI-related is imported.

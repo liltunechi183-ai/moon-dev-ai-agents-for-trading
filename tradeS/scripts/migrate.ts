@@ -1,4 +1,4 @@
-import "dotenv/config";
+import "../src/lib/load-env";
 import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import Database from "better-sqlite3";

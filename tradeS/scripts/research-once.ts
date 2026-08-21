@@ -1,5 +1,5 @@
 // One research run from the terminal: `npx tsx scripts/research-once.ts AAPL`
-import "dotenv/config";
+import "../src/lib/load-env";
 
 async function main() {
   const symbol = process.argv[2]?.toUpperCase();

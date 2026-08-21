@@ -1,5 +1,5 @@
 // Run the strategist once from the terminal: `npx tsx scripts/strategist-once.ts`
-import "dotenv/config";
+import "../src/lib/load-env";
 
 async function main() {
   const { guardAnthropicKey } = await import("../src/lib/env");

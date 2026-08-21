@@ -12,6 +12,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/migrate.ts",
     "doctor": "tsx scripts/doctor.ts",
+    "alpaca:keys": "tsx scripts/set-alpaca-keys.ts",
     "test": "vitest run"
   },
   "dependencies": {

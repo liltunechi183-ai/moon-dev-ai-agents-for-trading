@@ -33,7 +33,9 @@ npm run dev:all                # web app (:3100) + worker together
 
 Open http://localhost:3100. With **no keys at all** the app still works on
 delayed Yahoo data (no trading). Add free Alpaca **paper** keys to enable
-live US quotes and paper trading.
+live US quotes and paper trading — `npm run alpaca:keys` prompts for them
+and writes them into `.env.local` for you, so there's no dotfile to
+hand-edit.
 
 Not sure something's set up right? Run `npm run doctor` — it checks your
 Node version, dependencies, `.env.local`, Alpaca keys, and whether the
@@ -54,6 +56,7 @@ billing. `guardAnthropicKey()` deletes it at worker boot.
 | `npm test` | Vitest unit suites (the pure logic) |
 | `npm run db:generate` / `npm run db:migrate` | Drizzle migrations |
 | `npm run doctor` | checks your setup (Node, deps, env, keys, DB) and tells you what to fix |
+| `npm run alpaca:keys` | prompts for your Alpaca paper keys and writes them into `.env.local` |
 | `npx tsx scripts/research-once.ts AAPL` | one research run from the terminal |
 | `npx tsx scripts/strategist-once.ts` | run the self-improvement strategist once |
 

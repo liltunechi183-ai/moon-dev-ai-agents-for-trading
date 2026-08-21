@@ -37,14 +37,14 @@ export function SetupPanel() {
         >
           alpaca.markets
         </a>
-        , create paper-account keys, then add them to <code>.env.local</code>:
+        , switch to <strong>Paper Trading</strong>, and create API keys. Then run this in the
+        project folder — it asks for the two keys and writes them for you:
       </p>
-      <pre className="rounded bg-black/30 p-2 text-xs text-zinc-400">
-        {`ALPACA_KEY_ID=your_key\nALPACA_SECRET_KEY=your_secret\nALPACA_PAPER=true`}
-      </pre>
+      <pre className="rounded bg-black/30 p-2 text-xs text-zinc-400">npm run alpaca:keys</pre>
       <p className="mt-2 text-xs text-zinc-500">
-        Restart the app afterwards. Without keys, everything else still works on delayed Yahoo
-        data.
+        Prefer editing by hand? Put <code>ALPACA_KEY_ID</code>, <code>ALPACA_SECRET_KEY</code> and{" "}
+        <code>ALPACA_PAPER=true</code> in <code>.env.local</code> yourself. Either way, restart the
+        app afterwards. Without keys, everything else still works on delayed Yahoo data.
       </p>
     </div>
   );

@@ -37,6 +37,10 @@ live US quotes and paper trading — `npm run alpaca:keys` prompts for them
 and writes them into `.env.local` for you, so there's no dotfile to
 hand-edit.
 
+Something else already on :3100? Set `PORT` — `PORT=3200 npm run dev:all`
+serves the app on http://localhost:3200 instead. (Port 3100 is also
+Grafana Loki's default, so a collision is not unusual.)
+
 Not sure something's set up right? Run `npm run doctor` — it checks your
 Node version, dependencies, `.env.local`, Alpaca keys, and whether the
 database is migrated, then prints exactly what's missing and the command to

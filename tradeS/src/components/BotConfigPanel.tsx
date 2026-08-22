@@ -1,6 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import {
+  BOT_CONFIG_FIELDS,
+  toDisplay,
+  toStored,
+  validateDraft,
+  type NumericConfigKey,
+} from "@/lib/bot/config-fields";
 
 export interface BotConfigDto {
   enabled: boolean;
@@ -16,16 +23,6 @@ export interface BotConfigDto {
   maxSlicePct: number;
 }
 
-const NUMBER_FIELDS: Array<{ key: keyof BotConfigDto; label: string; step?: string }> = [
-  { key: "budgetUsd", label: "Bot budget ($)" },
-  { key: "maxPositionUsd", label: "Max per stock ($)" },
-  { key: "maxTotalExposureUsd", label: "Max total exposure ($)" },
-  { key: "maxDailyLossUsd", label: "Daily loss halt ($)" },
-  { key: "maxOrdersPerDay", label: "Max orders / day" },
-  { key: "cooldownMinutes", label: "Per-symbol cooldown (min)" },
-  { key: "cashReservePct", label: "Cash reserve (0-0.9)", step: "0.05" },
-  { key: "maxSlicePct", label: "Max slice of budget (0-1)", step: "0.05" },
-];
 
 export function BotConfigPanel({
   config,
@@ -38,7 +35,16 @@ export function BotConfigPanel({
   paper: boolean;
   onSaved: () => void;
 }) {
-  const [draft, setDraft] = useState<BotConfigDto>(config);
+  // Kept in DISPLAY units (percents as percents), converted on save.
+  const [draft, setDraft] = useState<Record<NumericConfigKey, number>>(() =>
+    Object.fromEntries(
+      BOT_CONFIG_FIELDS.map((f) => [f.key, toDisplay(config[f.key], f)]),
+    ) as Record<NumericConfigKey, number>,
+  );
+  const [errors, setErrors] = useState<string[]>([]);
+  // Separate from the numeric draft: it saves on its own button and must not
+  // ride along with the limits.
+  const [liveAckDraft, setLiveAckDraft] = useState(config.liveAck);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -51,11 +57,20 @@ export function BotConfigPanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(patch),
       });
-      if (!res.ok) throw new Error("save failed");
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        const fieldErrors = body?.error?.fieldErrors as Record<string, string[]> | undefined;
+        const detail = fieldErrors
+          ? Object.entries(fieldErrors)
+              .map(([field, msgs]) => `${field}: ${msgs.join(", ")}`)
+              .join(" · ")
+          : `HTTP ${res.status}`;
+        throw new Error(detail);
+      }
       setMessage("Saved.");
       onSaved();
-    } catch {
-      setMessage("Could not save.");
+    } catch (err) {
+      setMessage(`Could not save — ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setSaving(false);
     }
@@ -77,12 +92,14 @@ export function BotConfigPanel({
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        {NUMBER_FIELDS.map((f) => (
+        {BOT_CONFIG_FIELDS.map((f) => (
           <label key={f.key} className="flex flex-col gap-1 text-xs text-zinc-500">
             {f.label}
             <input
               type="number"
-              step={f.step ?? "any"}
+              min={f.min}
+              max={f.max}
+              step={f.step}
               value={String(draft[f.key])}
               onChange={(e) => setDraft({ ...draft, [f.key]: Number(e.target.value) })}
               className="rounded-md border border-white/10 bg-white/[0.02] px-2 py-1.5 text-sm text-zinc-100"
@@ -90,10 +107,28 @@ export function BotConfigPanel({
           </label>
         ))}
       </div>
+
+      {errors.length > 0 && (
+        <ul className="rounded-md border border-[#ef4444]/30 bg-[#ef4444]/5 p-2 text-xs text-[#ef4444]">
+          {errors.map((e) => (
+            <li key={e}>{e}</li>
+          ))}
+        </ul>
+      )}
       <button
         onClick={() => {
-          const { enabled: _enabled, liveAck: _liveAck, ...numbers } = draft;
-          save(numbers);
+          // Catch the mistake here rather than letting one bad field 400 the
+          // whole form and discard the changes that were fine.
+          const found = validateDraft(draft);
+          setErrors(found);
+          if (found.length > 0) {
+            setMessage(null);
+            return;
+          }
+          const patch = Object.fromEntries(
+            BOT_CONFIG_FIELDS.map((f) => [f.key, toStored(draft[f.key], f)]),
+          );
+          save(patch);
         }}
         disabled={saving}
         className="self-start rounded-md bg-white/10 px-3 py-1.5 text-xs font-medium text-zinc-100 hover:bg-white/15 disabled:opacity-50"
@@ -112,13 +147,13 @@ export function BotConfigPanel({
         </p>
         <p className="mt-2 rounded bg-black/30 p-2 text-xs text-zinc-300">{liveAckSentence}</p>
         <input
-          value={draft.liveAck}
-          onChange={(e) => setDraft({ ...draft, liveAck: e.target.value })}
+          value={liveAckDraft}
+          onChange={(e) => setLiveAckDraft(e.target.value)}
           placeholder="Type the sentence exactly"
           className="mt-2 w-full rounded-md border border-white/10 bg-white/[0.02] px-2 py-1.5 text-sm text-zinc-100"
         />
         <button
-          onClick={() => save({ liveAck: draft.liveAck })}
+          onClick={() => save({ liveAck: liveAckDraft })}
           disabled={saving}
           className="mt-2 rounded-md bg-[#ef4444]/15 px-3 py-1.5 text-xs font-medium text-[#ef4444] disabled:opacity-50"
         >

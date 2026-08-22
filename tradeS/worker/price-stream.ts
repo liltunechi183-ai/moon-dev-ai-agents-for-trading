@@ -62,6 +62,17 @@ export function startPriceStream(): void {
       for (const msg of arr) handleMessage(msg);
     });
 
+    // Alpaca sends no trade messages when the market is closed, but the
+    // connection stays healthy and the server keeps pinging. Counting those
+    // control frames as signs of life stops the watchdog below from
+    // "healing" a perfectly good socket every 90 seconds all weekend.
+    socket.on("ping", () => {
+      lastHeartbeat = Date.now();
+    });
+    socket.on("pong", () => {
+      lastHeartbeat = Date.now();
+    });
+
     socket.on("close", () => scheduleReconnect(socket));
 
     socket.on("error", (err) => {
@@ -204,6 +215,13 @@ export function startPriceStream(): void {
     if (Date.now() - lastHeartbeat > HEARTBEAT_TIMEOUT_MS) {
       console.warn("[price-stream] heartbeat timeout, forcing reconnect");
       ws.terminate();
+      return;
+    }
+    // Probe an idle-but-open socket ourselves. Without this the watchdog
+    // could only ever be as good as the server's ping cadence — and a
+    // genuinely dead connection during a quiet market would go unnoticed.
+    if (ws.readyState === WebSocket.OPEN && Date.now() - lastHeartbeat > HEARTBEAT_TIMEOUT_MS / 3) {
+      ws.ping();
     }
   }, 15_000);
 }

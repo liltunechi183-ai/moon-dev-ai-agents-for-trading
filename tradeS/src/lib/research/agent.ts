@@ -54,6 +54,14 @@ export async function runAnalysis(prompt: string, opts: RunAnalysisOptions): Pro
     } else if (message.type === "result") {
       if (message.subtype === "success") {
         resultText = message.result;
+      } else if (message.subtype === "error_max_turns") {
+        // Distinguish "ran out of room to think" from a real failure: it is
+        // recoverable, costs nothing to skip, and the fix (more turns) has a
+        // usage cost the operator should choose deliberately.
+        throw new Error(
+          `analysis hit its ${opts.maxTurns ?? 20}-turn limit before reaching a verdict — ` +
+            `this run was skipped (raise maxTurns if it keeps happening)`,
+        );
       } else {
         throw new Error(`agent ended without result (${message.subtype})`);
       }

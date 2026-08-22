@@ -15,7 +15,13 @@ export function FundsPanel() {
         >
           Alpaca dashboard
         </a>{" "}
-        and use its paper-account reset. The app picks up the new balance automatically.
+        and use its paper-account reset — you choose the starting balance there (the default is
+        $100k; a smaller number makes practice decisions feel more like real ones).
+      </p>
+      <p className="mt-2 text-amber-500/90">
+        A reset creates a new paper account, so your existing API keys stop working. Generate new
+        keys in the dashboard afterwards and run <code>npm run alpaca:keys</code> again, then
+        restart the app.
       </p>
     </div>
   );

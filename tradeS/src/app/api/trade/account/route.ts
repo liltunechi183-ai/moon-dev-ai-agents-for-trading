@@ -18,6 +18,7 @@ export async function GET() {
         cash: Number(account.cash),
         buyingPower: Number(account.buying_power),
         lastEquity: Number((account as { last_equity?: string }).last_equity ?? account.equity),
+        accountNumber: account.account_number ?? null,
       },
     });
   } catch (err) {

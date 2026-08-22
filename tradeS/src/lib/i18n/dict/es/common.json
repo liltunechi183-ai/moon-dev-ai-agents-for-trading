@@ -6,7 +6,6 @@
   "nav.bot": "Bot",
   "nav.strategy": "Estrategia",
   "nav.howto": "Guía",
-
   "common.loading": "Cargando…",
   "common.notAdvice": "Solo investigación de apoyo a decisiones. No es asesoría financiera.",
   "common.save": "Guardar",
@@ -19,17 +18,14 @@
   "common.marketClosed": "Mercado cerrado",
   "common.marketStatusUnknown": "Estado del mercado desconocido",
   "common.delayed": "retrasado",
-
   "dashboard.title": "Panel",
   "dashboard.holdings": "Tus acciones",
   "dashboard.watchlist": "Lista de seguimiento",
   "dashboard.noHoldings": "Aún no tienes acciones. Agrega una abajo.",
   "dashboard.noWatchlist": "Nada en la lista de seguimiento todavía.",
-
   "predictions.title": "Predicciones",
   "predictions.subtitle": "Solo investigación de apoyo a decisiones — no es asesoría financiera. Cada predicción se guarda y se califica contra lo que el precio realmente hizo.",
   "predictions.nothingTracked": "Nada en seguimiento todavía — agrega acciones o tickers a la lista de seguimiento en el Panel primero.",
-
   "trade.title": "Operar",
   "trade.paperBadge": "Cuenta de práctica",
   "trade.equity": "Capital",
@@ -39,7 +35,6 @@
   "trade.equityCurve": "Curva de capital",
   "trade.positions": "Posiciones",
   "trade.orders": "Órdenes",
-
   "bot.title": "Bot",
   "bot.running": "ACTIVO (revisa cada 5 min en horario de mercado)",
   "bot.stopped": "DETENIDO",
@@ -49,13 +44,12 @@
   "bot.killResult": "Bot desactivado. Se cancelaron {n} orden(es) abierta(s).",
   "bot.safetyBanner": "El bot solo opera en la cuenta de práctica, con dinero falso. Filtra por la confianza calibrada (ganada), usa stop-loss del lado del servidor, y cada decisión — incluidas las bloqueadas — queda registrada abajo. Solo investigación, no es asesoría financiera.",
   "bot.activity": "Actividad",
-
   "strategy.title": "Estrategia",
   "strategy.subtitle": "Cómo el sistema se mejora a sí mismo — el plan activo, cualquier retador en prueba, el historial de versiones y el presupuesto diario del agente.",
-
   "discoveries.title": "Descubrimientos",
   "discoveries.subtitle": "Claude busca acciones estadounidenses pequeñas y poco conocidas ligadas a noticias recientes. Nada se sigue hasta que tú lo apruebes. Solo investigación — no es asesoría financiera.",
   "discoveries.scanNow": "Buscar ahora",
   "discoveries.scanning": "Buscando… {s}s",
-  "discoveries.noPending": "No hay opciones pendientes. Ejecuta una búsqueda para encontrar nuevas."
+  "discoveries.noPending": "No hay opciones pendientes. Ejecuta una búsqueda para encontrar nuevas.",
+  "trade.accountNumberHint": "A qué cuenta paper de Alpaca pertenecen estas claves"
 }

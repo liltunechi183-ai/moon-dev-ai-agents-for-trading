@@ -12,6 +12,9 @@ export interface AlpacaAccount {
   equity: string;
   cash: string;
   buying_power: string;
+  /** Human-facing account number, e.g. PA3G1VF3C38V. Shown in the UI so you
+   * can tell which paper account the keys actually belong to. */
+  account_number?: string;
   [key: string]: unknown;
 }
 

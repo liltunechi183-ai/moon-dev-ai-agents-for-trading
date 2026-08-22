@@ -6,7 +6,6 @@
   "nav.bot": "Bot",
   "nav.strategy": "Strategy",
   "nav.howto": "How-to",
-
   "common.loading": "Loading…",
   "common.notAdvice": "Decision-support research only. Not financial advice.",
   "common.save": "Save",
@@ -19,17 +18,14 @@
   "common.marketClosed": "Market closed",
   "common.marketStatusUnknown": "Market status unknown",
   "common.delayed": "delayed",
-
   "dashboard.title": "Dashboard",
   "dashboard.holdings": "Holdings",
   "dashboard.watchlist": "Watchlist",
   "dashboard.noHoldings": "No holdings yet. Add one below.",
   "dashboard.noWatchlist": "Nothing on the watchlist yet.",
-
   "predictions.title": "Predictions",
   "predictions.subtitle": "Decision-support research only — not financial advice. Every call is stored and graded against what the price actually did.",
   "predictions.nothingTracked": "Nothing tracked yet — add holdings or watchlist tickers on the Dashboard first.",
-
   "trade.title": "Trade",
   "trade.paperBadge": "Paper trading",
   "trade.equity": "Equity",
@@ -39,7 +35,6 @@
   "trade.equityCurve": "Equity curve",
   "trade.positions": "Positions",
   "trade.orders": "Orders",
-
   "bot.title": "Bot",
   "bot.running": "RUNNING (checks every 5 min in market hours)",
   "bot.stopped": "STOPPED",
@@ -49,13 +44,12 @@
   "bot.killResult": "Bot disabled. Canceled {n} open order(s).",
   "bot.safetyBanner": "The bot trades the paper account only, with fake money. It gates on the calibrated (earned) confidence, uses server-side stop-losses, and every decision — including blocked ones — is logged below. Research only, not financial advice.",
   "bot.activity": "Activity",
-
   "strategy.title": "Strategy",
   "strategy.subtitle": "How the system improves itself — the active playbook, any challenger under test, the version history, and the daily agent budget.",
-
   "discoveries.title": "Discoveries",
   "discoveries.subtitle": "Claude hunts for small, overlooked US stocks tied to fresh news. Nothing is followed until you approve it. Research only — not financial advice.",
   "discoveries.scanNow": "Scan now",
   "discoveries.scanning": "Scanning… {s}s",
-  "discoveries.noPending": "No pending picks. Run a scan to hunt."
+  "discoveries.noPending": "No pending picks. Run a scan to hunt.",
+  "trade.accountNumberHint": "Which Alpaca paper account these keys belong to"
 }

@@ -16,6 +16,7 @@ interface AccountInfo {
     cash: number;
     buyingPower: number;
     lastEquity: number;
+    accountNumber: string | null;
   } | null;
 }
 
@@ -65,6 +66,17 @@ export default function TradePage() {
         <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-amber-500">
           {t("trade.paperBadge")}
         </span>
+        {acct?.accountNumber && (
+          // Which Alpaca paper account these keys belong to. Without it there
+          // is no way to tell a figure here apart from a different paper
+          // account open in the Alpaca dashboard.
+          <span
+            className="font-mono text-xs text-zinc-500"
+            title={t("trade.accountNumberHint")}
+          >
+            {acct.accountNumber}
+          </span>
+        )}
       </div>
 
       {info && !info.hasKeys && <SetupPanel />}

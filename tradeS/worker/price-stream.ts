@@ -113,7 +113,13 @@ export function startPriceStream(): void {
   }
 
   function resubscribe() {
-    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    // `authenticated` matters as much as OPEN here: the periodic resubscribe
+    // timer would otherwise fire on a socket that is connected but has not
+    // finished authenticating, and Alpaca answers a premature subscribe with
+    // 401 "not authenticated" — which reads as bad credentials when the keys
+    // are in fact fine. It also logged "subscribed to N symbols" for a
+    // subscription the server had rejected.
+    if (!authenticated || !ws || ws.readyState !== WebSocket.OPEN) return;
     const wanted = new Set(usSymbols());
     if (setsEqual(wanted, currentSubscribed)) return;
 

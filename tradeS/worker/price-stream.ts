@@ -4,12 +4,17 @@ import { getTrackedSymbols } from "@/lib/tracked";
 import { writeLatestPrice } from "@/lib/prices";
 import { toAlpacaSymbol, toAppSymbol, isUsTicker } from "@/lib/alpaca/symbols";
 import { alpaca } from "@/lib/alpaca/client";
+import {
+  initialBackoffState,
+  nextDelayMs,
+  shouldLogFailure,
+  describeStreamError,
+} from "@/lib/stream-backoff";
 
 const RESUBSCRIBE_INTERVAL_MS = 30_000;
 const HEAL_INTERVAL_MS = 5 * 60_000;
 const HEARTBEAT_TIMEOUT_MS = 90_000;
 const WRITE_THROTTLE_MS = 500;
-const MAX_BACKOFF_MS = 30_000;
 
 /**
  * Owns the SINGLE Alpaca IEX market-data websocket. The free tier allows
@@ -22,7 +27,9 @@ export function startPriceStream(): void {
   }
 
   let ws: WebSocket | null = null;
-  let backoffMs = 1000;
+  let backoff = initialBackoffState();
+  let reconnectPending = false;
+  let authenticated = false;
   let lastHeartbeat = Date.now();
   let currentSubscribed = new Set<string>();
   const lastWriteAt = new Map<string, number>();
@@ -32,14 +39,18 @@ export function startPriceStream(): void {
   }
 
   function connect() {
-    ws = new WebSocket(env.dataStreamUrl);
+    authenticated = false;
+    lastHeartbeat = Date.now();
+    const socket = new WebSocket(env.dataStreamUrl);
+    ws = socket;
 
-    ws.on("open", () => {
-      console.log("[price-stream] connected, authenticating");
-      ws!.send(JSON.stringify({ action: "auth", key: env.activeKeyId, secret: env.activeSecretKey }));
+    socket.on("open", () => {
+      socket.send(
+        JSON.stringify({ action: "auth", key: env.activeKeyId, secret: env.activeSecretKey }),
+      );
     });
 
-    ws.on("message", (raw) => {
+    socket.on("message", (raw) => {
       lastHeartbeat = Date.now();
       let messages: unknown;
       try {
@@ -51,13 +62,12 @@ export function startPriceStream(): void {
       for (const msg of arr) handleMessage(msg);
     });
 
-    ws.on("close", () => {
-      console.warn("[price-stream] connection closed, reconnecting");
-      scheduleReconnect();
-    });
+    socket.on("close", () => scheduleReconnect(socket));
 
-    ws.on("error", (err) => {
-      console.error("[price-stream] error:", err);
+    socket.on("error", (err) => {
+      // Surfaced through the close handler's throttled reporting; logging
+      // here too would double every line during an outage.
+      if (backoff.consecutiveFailures === 0) console.error("[price-stream] error:", err);
     });
   }
 
@@ -66,12 +76,17 @@ export function startPriceStream(): void {
     const m = msg as Record<string, unknown>;
 
     if (m.T === "success" && m.msg === "authenticated") {
-      backoffMs = 1000;
+      authenticated = true;
+      if (backoff.consecutiveFailures > 0) console.log("[price-stream] reconnected");
+      backoff = initialBackoffState();
+      currentSubscribed = new Set();
       resubscribe();
       return;
     }
     if (m.T === "error") {
-      console.error("[price-stream] server error:", m);
+      // Remember the code so scheduleReconnect can pick the right ladder —
+      // 406 in particular must not be retried on the fast one.
+      backoff.lastErrorCode = typeof m.code === "number" ? m.code : null;
       return;
     }
     if (m.T === "t") {
@@ -115,11 +130,40 @@ export function startPriceStream(): void {
     console.log(`[price-stream] subscribed to ${wanted.size} US symbols`);
   }
 
-  function scheduleReconnect() {
+  /**
+   * Exactly one reconnect may ever be in flight. Without this guard a
+   * terminate() plus the socket's own close, or a stale socket closing after
+   * it had already been replaced, each start their own chain — and the
+   * chains multiply until the account is hammering Alpaca continuously.
+   */
+  function scheduleReconnect(closed: WebSocket) {
+    closed.removeAllListeners();
+    if (closed !== ws) return; // a superseded socket finally closing — ignore
+    if (reconnectPending) return;
+    reconnectPending = true;
+    ws = null;
+
+    backoff.consecutiveFailures += 1;
+    const delayMs = nextDelayMs(backoff);
+
+    if (shouldLogFailure(backoff.consecutiveFailures)) {
+      const explanation =
+        backoff.lastErrorCode !== null ? describeStreamError(backoff.lastErrorCode) : null;
+      const detail = explanation
+        ? ` — ${explanation}`
+        : backoff.lastErrorCode !== null
+          ? ` — server error ${backoff.lastErrorCode}`
+          : "";
+      console.warn(
+        `[price-stream] disconnected (attempt ${backoff.consecutiveFailures}), ` +
+          `retrying in ${Math.round(delayMs / 1000)}s${detail}`,
+      );
+    }
+
     setTimeout(() => {
-      backoffMs = Math.min(backoffMs * 2, MAX_BACKOFF_MS);
+      reconnectPending = false;
       connect();
-    }, backoffMs);
+    }, delayMs);
   }
 
   async function healGaps() {
@@ -147,9 +191,13 @@ export function startPriceStream(): void {
   setInterval(resubscribe, RESUBSCRIBE_INTERVAL_MS);
   setInterval(healGaps, HEAL_INTERVAL_MS);
   setInterval(() => {
+    // Only police a stream that actually got up and running. While we are
+    // still failing to authenticate, scheduleReconnect owns the retry
+    // timing — terminating here too would short-circuit its backoff.
+    if (!authenticated || reconnectPending || !ws) return;
     if (Date.now() - lastHeartbeat > HEARTBEAT_TIMEOUT_MS) {
       console.warn("[price-stream] heartbeat timeout, forcing reconnect");
-      ws?.terminate();
+      ws.terminate();
     }
   }, 15_000);
 }

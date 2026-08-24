@@ -39,7 +39,18 @@ export interface PrimerSaltoParams {
   commissionPct: number;
 }
 
-/** The values the Pine script ships with, i.e. the validated configuration. */
+/**
+ * The Pine script's values, with one correction.
+ *
+ * Its header calls 0.5*ATR "validated", but that came from a sweep over ten
+ * or so symbols — the same small-sample flaw this repo's own study found in a
+ * profit factor quoted from ten symbols. Swept over all 69 symbols here
+ * (scripts/primer-salto-sweep.ts), 0.5 is the WEAKEST width tested on every
+ * measure and in both windows, while 1.0 is the peak out of sample on average
+ * R (0.463) and profit factor (2.30), and within noise of the best on percent
+ * per trade. It is also the width that does not depend on how positions are
+ * sized, which removes a coupled decision rather than betting on it.
+ */
 export const DEFAULT_PARAMS: PrimerSaltoParams = {
   trendDays: 5,
   trendWindow: 10,
@@ -51,7 +62,7 @@ export const DEFAULT_PARAMS: PrimerSaltoParams = {
   useNewsFilter: false,
   newsAtrMult: 2.5,
   atrLen: 14,
-  atrStopMult: 0.5,
+  atrStopMult: 1.0,
   rMult: 3.0,
   maxBars: 20,
   commissionPct: 0.0005,

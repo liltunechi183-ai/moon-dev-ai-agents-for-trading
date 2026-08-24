@@ -88,8 +88,11 @@ A mechanical, long-only checklist (prior downtrend → RSI exhaustion → close
 back above both the 20 and 40-day means → confirming jump bar), run by
 `worker/primer-salto-runner.ts` once a day at 15:50 ET over the 69 symbols in
 `src/lib/study/universe.ts`. Entries carry a bracket priced from the signal
-bar — stop at `low − 0.5×ATR`, target at 3R — plus a 20-session time exit the
-broker cannot express.
+bar — stop at `low − 1.0×ATR`, target at 3R — plus a 20-session time exit the
+broker cannot express. Every entry records the regime, RSI, ATR and stop
+distance it fired under; nothing filters on them yet, but the question
+"did this work better in a bull market?" can only be answered later if the
+answer was written down at the time.
 
 It runs BESIDE the AI rule engine, not through it: that engine gates on a
 fresh prediction, which this strategy neither has nor needs. Separate switch

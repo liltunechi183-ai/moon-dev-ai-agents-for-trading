@@ -32,7 +32,10 @@ import type { Bar } from "../src/lib/quant/types";
 const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] });
 
 const STOP_MULTS = [0.5, 0.75, 1.0, 1.5, 2.0, 2.5, 3.0];
-const R_MULTS = [2.0, 3.0, 4.0];
+// Reaches past 4R deliberately: if results keep improving all the way out,
+// the target is not binding and the time exit is doing the work — which is a
+// different finding from "a more distant target is better".
+const R_MULTS = [2.0, 3.0, 4.0, 5.0, 6.0];
 
 function arg(name: string): string | null {
   const i = process.argv.indexOf(name);

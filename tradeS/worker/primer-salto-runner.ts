@@ -34,6 +34,7 @@ import { getBotConfig, isLiveAckValid, disableBot } from "@/lib/bot/config";
 import { checkSafeguards } from "@/lib/bot/safeguards";
 import { notify } from "@/lib/bot/notify";
 import { PRIMER_SALTO_UNIVERSE } from "@/lib/study/universe";
+import { getCurrentRegime } from "@/lib/research/regime";
 import {
   PRIMER_SALTO_STRATEGY,
   decideForSymbol,
@@ -156,6 +157,12 @@ export async function runPrimerSaltoTick(): Promise<void> {
   }
 
   // ── 3. New signals ──────────────────────────────────────────────────────
+  // Recorded on every entry from day one. Nothing filters on regime yet, and
+  // that is deliberate: filtering on an untested hunch is how you fit noise.
+  // But a year from now the only way to ask "did this work better in a bull
+  // market?" is to have written it down at the time.
+  const regime = await getCurrentRegime().catch(() => null);
+
   const notionalUsd = config.primerSaltoNotionalUsd;
   const maxConcurrent = maxConcurrentPositions(config.maxTotalExposureUsd, notionalUsd);
   let openCount = openPositions().length;
@@ -243,7 +250,13 @@ export async function runPrimerSaltoTick(): Promise<void> {
         `checklist met — ${shares} shares (~$${orderNotionalUsd.toFixed(0)}), ` +
         `stop $${toCents(plan.stopPrice)}, target $${toCents(plan.targetPrice)} (3R)`;
       notify({ kind: "buy", symbol, reason: `Primer Salto — ${reason}` });
-      logActivity({ symbol, decision: "buy", reason, orderId: order.id, snapshot: plan });
+      logActivity({
+        symbol,
+        decision: "buy",
+        reason,
+        orderId: order.id,
+        snapshot: { ...plan, regime, shares, orderNotionalUsd },
+      });
       openCount += 1;
       bought += 1;
     } catch (err) {

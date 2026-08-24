@@ -23,6 +23,28 @@ export function tradingDate(ts: number): string {
   }).format(new Date(ts));
 }
 
+/**
+ * What the market looked like when the signal fired.
+ *
+ * Recorded on every entry from day one even though nothing filters on it
+ * yet. The alternative — deciding later that regime or volatility matters
+ * and having no way to look back — is how a year of paper trading turns into
+ * a year of unanswerable questions. Cheap to write, impossible to
+ * reconstruct after the fact.
+ */
+export interface EntryContext {
+  /** ATR as a fraction of price: how volatile this name is right now. */
+  atrPct: number;
+  /** RSI at the signal bar — how deep the exhaustion was. */
+  rsi: number | null;
+  /** Stop distance as a fraction of the entry price. */
+  stopDistancePct: number;
+  /** Distance from the 40-day mean, as a fraction: how far it had fallen. */
+  distanceFromSlowMaPct: number | null;
+  /** Whether the exhaustion rule was in force for this signal. */
+  strictMode: boolean;
+}
+
 export interface EntryPlan {
   /** Close of the signal bar — what the order is sized against. */
   price: number;
@@ -31,6 +53,7 @@ export interface EntryPlan {
   entryDate: string;
   /** Risk per share, i.e. price − stop. Always positive. */
   riskPerShare: number;
+  context: EntryContext;
 }
 
 /**
@@ -45,7 +68,7 @@ export function planEntry(
   params: PrimerSaltoParams = DEFAULT_PARAMS,
 ): EntryPlan | null {
   if (bars.length === 0) return null;
-  const { long, atr } = computeSignals(bars, params);
+  const { long, atr, rsi, maSlow } = computeSignals(bars, params);
   const i = bars.length - 1;
   if (!long[i]) return null;
 
@@ -59,12 +82,20 @@ export function planEntry(
   // tiny relative to the bar; the trade has no defined risk, so skip it.
   if (riskPerShare <= 0) return null;
 
+  const slow = maSlow[i];
   return {
     price: bar.close,
     stopPrice,
     targetPrice: bar.close + params.rMult * riskPerShare,
     entryDate: tradingDate(bar.ts),
     riskPerShare,
+    context: {
+      atrPct: a / bar.close,
+      rsi: rsi[i],
+      stopDistancePct: riskPerShare / bar.close,
+      distanceFromSlowMaPct: slow !== null && slow > 0 ? (bar.close - slow) / slow : null,
+      strictMode: params.useExhaust,
+    },
   };
 }
 

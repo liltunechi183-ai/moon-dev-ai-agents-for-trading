@@ -1,0 +1,14 @@
+###Primer Salto — Tech
+AAPL,MSFT,GOOGL,AMZN,META,NVDA,ADBE,CRM,ORCL,CSCO,INTC,AMD,QCOM,TXN,AVGO,MU,AMAT,IBM
+###Primer Salto — Financieras
+JPM,BAC,WFC,GS,MS,C,AXP,SCHW,BLK,V,MA
+###Primer Salto — Salud
+JNJ,PFE,MRK,ABBV,UNH,LLY,TMO,ABT,BMY,AMGN
+###Primer Salto — Consumo
+WMT,COST,HD,MCD,NKE,SBUX,TGT,LOW,PG,KO,PEP
+###Primer Salto — Industria y energia
+BA,CAT,GE,HON,UPS,LMT,XOM,CVX,COP,SLB
+###Primer Salto — Otros
+DIS,T,VZ,TSLA,NFLX
+###Primer Salto — ETFs indice
+SPY,QQQ,IWM,DIA

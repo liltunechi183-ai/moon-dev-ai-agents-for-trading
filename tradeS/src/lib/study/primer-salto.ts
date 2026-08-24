@@ -318,6 +318,17 @@ export function summarize(trades: Trade[], years: number): Stats {
   };
 }
 
+/**
+ * Did this symbol stay profitable? Uses the average trade rather than the
+ * profit factor, which is undefined when there were no losses at all — a
+ * perfect record, not a failure. With equal-weighted trades the two agree
+ * everywhere else (PF > 1 exactly when the average is positive), so this is
+ * the same test with one fewer way to be wrong.
+ */
+export function stayedProfitable(stats: Stats): boolean {
+  return stats.trades > 0 && (stats.avgReturnPct ?? 0) > 0;
+}
+
 /** Keep only the trades ENTERED inside [fromTs, toTs). */
 export function tradesInWindow(trades: Trade[], fromTs: number, toTs: number): Trade[] {
   return trades.filter((t) => t.entryTs >= fromTs && t.entryTs < toTs);

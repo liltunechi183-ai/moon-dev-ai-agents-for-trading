@@ -22,6 +22,7 @@ import {
   simulate,
   summarize,
   tradesInWindow,
+  stayedProfitable,
   type PrimerSaltoParams,
   type Stats,
   type Trade,
@@ -188,7 +189,7 @@ async function main() {
   );
   let held = 0;
   for (const r of picks) {
-    const kept = (r.outSample.profitFactor ?? 0) > 1;
+    const kept = stayedProfitable(r.outSample);
     if (kept) held += 1;
     console.log(
       `${r.symbol.padEnd(6)} ${String(r.inSample.trades).padStart(5)} ` +

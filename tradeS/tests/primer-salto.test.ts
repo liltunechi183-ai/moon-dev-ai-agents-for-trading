@@ -7,6 +7,8 @@ import {
   tradesInWindow,
   type PrimerSaltoParams,
   type Trade,
+  type Stats,
+  stayedProfitable,
 } from "@/lib/study/primer-salto";
 import type { Bar } from "@/lib/quant/types";
 
@@ -211,5 +213,34 @@ describe("tradesInWindow", () => {
 
   it("returns nothing when the window is empty", () => {
     expect(tradesInWindow([at(10)], 100, 200)).toEqual([]);
+  });
+});
+
+describe("stayedProfitable", () => {
+  const stats = (trades: number, avgReturnPct: number | null, profitFactor: number | null) =>
+    ({
+      trades,
+      wins: 0,
+      winRate: null,
+      profitFactor,
+      avgReturnPct,
+      totalReturnPct: null,
+      tradesPerYear: null,
+      maxDrawdownPct: null,
+    }) as Stats;
+
+  it("regression: a flawless record counts as profitable even though its PF is undefined", () => {
+    // Nothing was lost, so profit factor divides by zero and comes back null.
+    // Reading that as zero marked perfect symbols as failures.
+    expect(stayedProfitable(stats(1, 0.1155, null))).toBe(true);
+  });
+
+  it("agrees with profit factor wherever profit factor is defined", () => {
+    expect(stayedProfitable(stats(5, 0.02, 1.8))).toBe(true);
+    expect(stayedProfitable(stats(5, -0.01, 0.4))).toBe(false);
+  });
+
+  it("a symbol with no trades did not stay profitable — it said nothing", () => {
+    expect(stayedProfitable(stats(0, null, null))).toBe(false);
   });
 });

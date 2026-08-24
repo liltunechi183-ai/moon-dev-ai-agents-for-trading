@@ -9,6 +9,7 @@ import {
   type Trade,
   type Stats,
   stayedProfitable,
+  averageR,
 } from "@/lib/study/primer-salto";
 import type { Bar } from "@/lib/quant/types";
 
@@ -242,5 +243,44 @@ describe("stayedProfitable", () => {
 
   it("a symbol with no trades did not stay profitable — it said nothing", () => {
     expect(stayedProfitable(stats(0, null, null))).toBe(false);
+  });
+});
+
+describe("averageR", () => {
+  const trade = (entryPrice: number, stopPrice: number, returnPct: number): Trade =>
+    ({
+      entryIndex: 0, entryTs: 0, entryPrice, stopPrice, targetPrice: 0,
+      exitIndex: 1, exitTs: 0, exitPrice: 0, exitReason: "target", returnPct,
+    }) as Trade;
+
+  it("scores a trade that reached its 3R target near +3, whatever the stop's width", () => {
+    // Tight stop: 2% risk, +6% move. Wide stop: 8% risk, +24% move. Same R.
+    const tight = averageR([trade(100, 98, 0.06)]);
+    const wide = averageR([trade(100, 92, 0.24)]);
+    expect(tight).toBeCloseTo(3, 6);
+    expect(wide).toBeCloseTo(3, 6);
+  });
+
+  it("scores a stop-out near −1", () => {
+    expect(averageR([trade(100, 95, -0.05)])).toBeCloseTo(-1, 6);
+  });
+
+  it("separates the two sizing yardsticks: same R, very different percent", () => {
+    // This is the whole point of tracking both — a wide stop wins more
+    // percent per trade while covering the same multiple of its own risk.
+    const tight = [trade(100, 98, 0.06)];
+    const wide = [trade(100, 92, 0.24)];
+    expect(averageR(tight)).toBeCloseTo(averageR(wide)!, 6);
+    expect(summarize(wide, 1).avgReturnPct!).toBeGreaterThan(summarize(tight, 1).avgReturnPct!);
+  });
+
+  it("ignores trades with no defined risk rather than scoring them zero", () => {
+    expect(averageR([trade(100, 100, 0.05), trade(100, 95, -0.05)])).toBeCloseTo(-1, 6);
+    expect(averageR([trade(100, 100, 0.05)])).toBeNull();
+  });
+
+  it("is null with no trades at all", () => {
+    expect(averageR([])).toBeNull();
+    expect(summarize([], 1).avgR).toBeNull();
   });
 });

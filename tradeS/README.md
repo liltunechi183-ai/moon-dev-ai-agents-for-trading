@@ -64,6 +64,7 @@ billing. `guardAnthropicKey()` deletes it at worker boot.
 | `npx tsx scripts/research-once.ts AAPL` | one research run from the terminal |
 | `npx tsx scripts/strategist-once.ts` | run the self-improvement strategist once |
 | `npx tsx scripts/primer-salto-study.ts` | backtest the "Primer Salto" checklist across ~60 symbols, with an in/out-of-sample split |
+| `npx tsx scripts/primer-salto-sweep.ts` | stop width vs sizing method — the two disagree, and that is the point |
 
 ## What's inside (by page)
 

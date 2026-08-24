@@ -277,6 +277,19 @@ export interface Stats {
   tradesPerYear: number | null;
   /** Worst peak-to-trough on the compounded equity curve. */
   maxDrawdownPct: number | null;
+  /**
+   * Average result in multiples of the risk taken (R).
+   *
+   * This and avgReturnPct answer DIFFERENT questions, and which one matters
+   * depends on how positions are sized. Betting a fixed dollar amount per
+   * trade makes avgReturnPct the yardstick — every trade deploys the same
+   * capital, so percent return is the return. Betting a fixed fraction of the
+   * account as RISK makes avgR the yardstick — a wider stop buys fewer shares,
+   * so the percent move matters less than how many multiples of the risk it
+   * covered. A stop width can look good on one and bad on the other, which is
+   * why stop width and sizing method are a single decision, not two.
+   */
+  avgR: number | null;
 }
 
 export function summarize(trades: Trade[], years: number): Stats {
@@ -290,6 +303,7 @@ export function summarize(trades: Trade[], years: number): Stats {
       totalReturnPct: null,
       tradesPerYear: years > 0 ? 0 : null,
       maxDrawdownPct: null,
+      avgR: null,
     };
   }
 
@@ -315,7 +329,25 @@ export function summarize(trades: Trade[], years: number): Stats {
     totalReturnPct: equity - 1,
     tradesPerYear: years > 0 ? trades.length / years : null,
     maxDrawdownPct: maxDd,
+    avgR: averageR(trades),
   };
+}
+
+/**
+ * Mean result in R. Risk is measured at the entry — (entry − stop) / entry —
+ * so a trade that ran to its 3R target scores near +3 whatever the stop's
+ * width, and one that stopped out scores near −1. Trades with no defined
+ * risk are excluded rather than counted as zero, which would quietly drag
+ * the average toward the middle.
+ */
+export function averageR(trades: Trade[]): number | null {
+  const usable = trades.filter((t) => t.entryPrice > t.stopPrice && t.entryPrice > 0);
+  if (usable.length === 0) return null;
+  const total = usable.reduce((sum, t) => {
+    const riskPct = (t.entryPrice - t.stopPrice) / t.entryPrice;
+    return sum + t.returnPct / riskPct;
+  }, 0);
+  return total / usable.length;
 }
 
 /**

@@ -376,3 +376,54 @@ export function stayedProfitable(stats: Stats): boolean {
 export function tradesInWindow(trades: Trade[], fromTs: number, toTs: number): Trade[] {
   return trades.filter((t) => t.entryTs >= fromTs && t.entryTs < toTs);
 }
+
+/**
+ * Median dollar volume over the most recent `lookback` bars.
+ *
+ * The median rather than the mean on purpose: one earnings day with twenty
+ * times normal turnover should not make a thinly traded name look liquid.
+ * This is the "can I actually get filled here?" test, and it is applied to
+ * candidate symbols before they join a universe — a mechanical gate, so that
+ * which names get added is decided by the data rather than by whoever wrote
+ * the list.
+ */
+export function medianDollarVolume(bars: Bar[], lookback = 60): number | null {
+  const recent = bars.slice(-lookback).filter((b) => b.volume > 0 && b.close > 0);
+  if (recent.length === 0) return null;
+  const values = recent.map((b) => b.close * b.volume).sort((a, b) => a - b);
+  const mid = Math.floor(values.length / 2);
+  return values.length % 2 === 0 ? (values[mid - 1] + values[mid]) / 2 : values[mid];
+}
+
+export interface EligibilityInput {
+  bars: Bar[];
+  minBars: number;
+  minDollarVolume: number;
+}
+
+export type Eligibility =
+  | { eligible: true; dollarVolume: number }
+  | { eligible: false; why: "not-enough-history" | "too-illiquid" | "no-volume"; detail: string };
+
+/** Does this candidate belong in the universe at all? */
+export function checkEligibility(input: EligibilityInput): Eligibility {
+  if (input.bars.length < input.minBars) {
+    return {
+      eligible: false,
+      why: "not-enough-history",
+      detail: `${input.bars.length} bars, need ${input.minBars}`,
+    };
+  }
+  const dv = medianDollarVolume(input.bars);
+  if (dv === null) {
+    return { eligible: false, why: "no-volume", detail: "no usable volume data" };
+  }
+  if (dv < input.minDollarVolume) {
+    return {
+      eligible: false,
+      why: "too-illiquid",
+      detail: `$${(dv / 1e6).toFixed(1)}M/day, need $${(input.minDollarVolume / 1e6).toFixed(0)}M`,
+    };
+  }
+  return { eligible: true, dollarVolume: dv };
+}

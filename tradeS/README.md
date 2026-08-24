@@ -100,7 +100,13 @@ on the Bot page, same safeguards, separate books — so the two can be compared
 rather than confused.
 
 `npx tsx scripts/primer-salto-study.ts` re-runs the backtest behind it
-(`--loose` drops the exhaustion filter, `--symbols` narrows the universe).
+(`--loose` drops the exhaustion filter, `--symbols` narrows the universe,
+`--wide` swaps the 69-symbol core for a ~350-name candidate pool). Candidates
+are admitted by two mechanical tests — enough history, and enough median
+dollar volume to actually get filled — so which names join is decided by the
+data rather than by whoever wrote the list. Both lists share one flaw worth
+stating: they contain companies that still exist, so any result over them is
+optimistic by the amount survivorship is worth.
 
 ## Adding a language
 

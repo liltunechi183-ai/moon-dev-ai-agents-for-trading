@@ -23,11 +23,12 @@ import {
   summarize,
   tradesInWindow,
   stayedProfitable,
+  checkEligibility,
   type PrimerSaltoParams,
   type Stats,
   type Trade,
 } from "../src/lib/study/primer-salto";
-import { PRIMER_SALTO_UNIVERSE } from "../src/lib/study/universe";
+import { PRIMER_SALTO_UNIVERSE, PRIMER_SALTO_CANDIDATES } from "../src/lib/study/universe";
 import type { Bar } from "../src/lib/quant/types";
 
 const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] });
@@ -93,7 +94,10 @@ async function main() {
   const splitDate = arg("--split") ?? "2021-01-01";
   const splitTs = new Date(splitDate).getTime();
   const loose = process.argv.includes("--loose");
-  const symbols = (arg("--symbols")?.split(",").map((s) => s.trim().toUpperCase()) ?? [...PRIMER_SALTO_UNIVERSE])
+  const wide = process.argv.includes("--wide");
+  const minDollarVolume = Number(arg("--min-dollar-volume") ?? 2e7);
+  const pool = wide ? PRIMER_SALTO_CANDIDATES : PRIMER_SALTO_UNIVERSE;
+  const symbols = (arg("--symbols")?.split(",").map((s) => s.trim().toUpperCase()) ?? [...pool])
     .filter(Boolean);
 
   const params: PrimerSaltoParams = { ...DEFAULT_PARAMS, useExhaust: !loose };
@@ -103,7 +107,8 @@ async function main() {
   console.log(`Mode:    ${loose ? "FREQUENCY (rule 2 off)" : "STRICT (full checklist)"}`);
   console.log(`Window:  ${from} → ${to}`);
   console.log(`Split:   train < ${splitDate} ≤ test`);
-  console.log(`Symbols: ${symbols.length}\n`);
+  console.log(`Symbols: ${symbols.length}${wide ? " (wide pool)" : ""}`);
+  console.log(`Liquidity floor: $${(minDollarVolume / 1e6).toFixed(0)}M median daily volume\n`);
 
   const results: SymbolResult[] = [];
   const failures: string[] = [];
@@ -113,9 +118,12 @@ async function main() {
     process.stdout.write(`  ${symbol.padEnd(6)}`);
     try {
       const bars = await fetchBars(symbol, from, to);
-      if (bars.length < 300) {
-        console.log(" — not enough history, skipped");
-        failures.push(`${symbol} (only ${bars.length} bars)`);
+      // Mechanical gate: the data decides membership, not the person who
+      // wrote the candidate list.
+      const eligible = checkEligibility({ bars, minBars: 300, minDollarVolume });
+      if (!eligible.eligible) {
+        console.log(` — skipped (${eligible.detail})`);
+        failures.push(`${symbol} (${eligible.detail})`);
         continue;
       }
       const trades = simulate(bars, params);

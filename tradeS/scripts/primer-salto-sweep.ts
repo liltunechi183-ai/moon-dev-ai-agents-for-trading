@@ -23,10 +23,11 @@ import {
   simulate,
   summarize,
   tradesInWindow,
+  checkEligibility,
   type PrimerSaltoParams,
   type Stats,
 } from "../src/lib/study/primer-salto";
-import { PRIMER_SALTO_UNIVERSE } from "../src/lib/study/universe";
+import { PRIMER_SALTO_UNIVERSE, PRIMER_SALTO_CANDIDATES } from "../src/lib/study/universe";
 import type { Bar } from "../src/lib/quant/types";
 
 const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] });
@@ -75,21 +76,26 @@ async function main() {
   const splitDate = arg("--split") ?? "2021-01-01";
   const splitTs = new Date(splitDate).getTime();
   const loose = process.argv.includes("--loose");
+  const wide = process.argv.includes("--wide");
+  const minDollarVolume = Number(arg("--min-dollar-volume") ?? 2e7);
+  const pool = wide ? PRIMER_SALTO_CANDIDATES : PRIMER_SALTO_UNIVERSE;
 
   console.log("Primer Salto — stop width vs sizing method");
   console.log("=".repeat(42));
   console.log(`Mode:    ${loose ? "FREQUENCY (rule 2 off)" : "STRICT (full checklist)"}`);
   console.log(`Window:  ${from} → ${to}   split ${splitDate}`);
-  console.log(`Symbols: ${PRIMER_SALTO_UNIVERSE.length}\n`);
+  console.log(`Symbols: ${pool.length}${wide ? " candidates (wide pool)" : ""}\n`);
 
   // Fetch once, reuse for every parameter combination. Refetching per combo
   // would be 21x the requests for identical data.
   process.stdout.write("Fetching bars");
   const barsBySymbol = new Map<string, Bar[]>();
-  for (const symbol of PRIMER_SALTO_UNIVERSE) {
+  for (const symbol of pool) {
     try {
       const bars = await fetchBars(symbol, from, to);
-      if (bars.length >= 300) barsBySymbol.set(symbol, bars);
+      if (checkEligibility({ bars, minBars: 300, minDollarVolume }).eligible) {
+        barsBySymbol.set(symbol, bars);
+      }
       process.stdout.write(".");
     } catch {
       process.stdout.write("x");

@@ -10,6 +10,8 @@ import {
   type Stats,
   stayedProfitable,
   averageR,
+  medianDollarVolume,
+  checkEligibility,
 } from "@/lib/study/primer-salto";
 import type { Bar } from "@/lib/quant/types";
 
@@ -282,5 +284,54 @@ describe("averageR", () => {
   it("is null with no trades at all", () => {
     expect(averageR([])).toBeNull();
     expect(summarize([], 1).avgR).toBeNull();
+  });
+});
+
+describe("medianDollarVolume", () => {
+  const bar = (close: number, volume: number): Bar => ({
+    ts: 0, open: close, high: close, low: close, close, volume,
+  });
+
+  it("is not fooled by a single huge earnings-day print", () => {
+    const quiet = Array.from({ length: 59 }, () => bar(10, 100_000));
+    const spike = bar(10, 50_000_000);
+    // Mean would be ~$9.5M/day; the median stays at the honest $1M.
+    expect(medianDollarVolume([...quiet, spike])).toBe(1_000_000);
+  });
+
+  it("multiplies price by volume, not either alone", () => {
+    expect(medianDollarVolume([bar(200, 1_000)])).toBe(200_000);
+  });
+
+  it("looks only at the recent window", () => {
+    const old = Array.from({ length: 100 }, () => bar(10, 10_000_000));
+    const recent = Array.from({ length: 60 }, () => bar(10, 100_000));
+    expect(medianDollarVolume([...old, ...recent], 60)).toBe(1_000_000);
+  });
+
+  it("returns null rather than zero when there is nothing to measure", () => {
+    expect(medianDollarVolume([])).toBeNull();
+    expect(medianDollarVolume([bar(10, 0)])).toBeNull();
+  });
+});
+
+describe("checkEligibility", () => {
+  const bars = (n: number, volume: number): Bar[] =>
+    Array.from({ length: n }, () => ({ ts: 0, open: 10, high: 10, low: 10, close: 10, volume }));
+
+  it("admits a liquid symbol with enough history", () => {
+    const r = checkEligibility({ bars: bars(400, 5_000_000), minBars: 300, minDollarVolume: 2e7 });
+    expect(r.eligible).toBe(true);
+  });
+
+  it("rejects a short history rather than backtesting a stub", () => {
+    const r = checkEligibility({ bars: bars(100, 5_000_000), minBars: 300, minDollarVolume: 2e7 });
+    expect(r).toMatchObject({ eligible: false, why: "not-enough-history" });
+  });
+
+  it("rejects a name too thin to get filled in, and says how thin", () => {
+    const r = checkEligibility({ bars: bars(400, 10_000), minBars: 300, minDollarVolume: 2e7 });
+    expect(r).toMatchObject({ eligible: false, why: "too-illiquid" });
+    if (!r.eligible) expect(r.detail).toContain("M/day");
   });
 });

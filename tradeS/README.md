@@ -63,6 +63,7 @@ billing. `guardAnthropicKey()` deletes it at worker boot.
 | `npm run alpaca:keys` | prompts for your Alpaca paper keys and writes them into `.env.local` |
 | `npx tsx scripts/research-once.ts AAPL` | one research run from the terminal |
 | `npx tsx scripts/strategist-once.ts` | run the self-improvement strategist once |
+| `npx tsx scripts/primer-salto-study.ts` | backtest the "Primer Salto" checklist across ~60 symbols, with an in/out-of-sample split |
 
 ## What's inside (by page)
 

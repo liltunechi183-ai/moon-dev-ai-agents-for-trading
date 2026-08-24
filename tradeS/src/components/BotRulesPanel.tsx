@@ -33,11 +33,22 @@ export function BotRulesPanel({ rules, onChanged }: { rules: BotRuleDto[]; onCha
   const [outlook, setOutlook] = useState<"bullish" | "bearish" | "neutral">("bullish");
   const [minConfidence, setMinConfidence] = useState("7");
   const [pattern, setPattern] = useState<string>("");
+  const [notionalUsd, setNotionalUsd] = useState("500");
   const [stopLossPct, setStopLossPct] = useState("5");
   const [takeProfitPct, setTakeProfitPct] = useState("");
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function createRule() {
+    // The trade size is the one number that decides how much money each
+    // firing puts at risk — refuse to create a rule with a nonsensical one
+    // rather than sending it and letting the API 400 with no explanation.
+    const size = Number(notionalUsd);
+    if (!Number.isFinite(size) || size <= 0) {
+      setError("Trade size must be a positive dollar amount");
+      return;
+    }
+    setError(null);
     setBusy(true);
     try {
       await fetch("/api/bot/rules", {
@@ -55,7 +66,7 @@ export function BotRulesPanel({ rules, onChanged }: { rules: BotRuleDto[]; onCha
           },
           action: {
             side,
-            notionalUsd: 500,
+            notionalUsd: Number(notionalUsd),
             orderType: "market",
             stopLossPct: Number(stopLossPct),
             ...(takeProfitPct ? { takeProfitPct: Number(takeProfitPct) } : {}),
@@ -195,6 +206,17 @@ export function BotRulesPanel({ rules, onChanged }: { rules: BotRuleDto[]; onCha
               </select>
             </label>
             <label className="flex flex-col gap-1 text-zinc-500">
+              Trade size ($)
+              <input
+                type="number"
+                min="1"
+                step="50"
+                value={notionalUsd}
+                onChange={(e) => setNotionalUsd(e.target.value)}
+                className="rounded-md border border-white/10 bg-white/[0.02] px-2 py-1.5 text-sm text-zinc-100"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-zinc-500">
               Stop-loss %
               <input
                 type="number"
@@ -216,6 +238,11 @@ export function BotRulesPanel({ rules, onChanged }: { rules: BotRuleDto[]; onCha
               />
             </label>
           </div>
+          {error && (
+            <p className="rounded-md border border-[#ef4444]/30 bg-[#ef4444]/5 p-2 text-xs text-[#ef4444]">
+              {error}
+            </p>
+          )}
           <div className="flex gap-2">
             <button
               onClick={createRule}

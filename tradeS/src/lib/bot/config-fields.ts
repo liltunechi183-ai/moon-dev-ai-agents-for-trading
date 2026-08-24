@@ -20,7 +20,8 @@ export type NumericConfigKey =
   | "cooldownMinutes"
   | "minConfidence"
   | "cashReservePct"
-  | "maxSlicePct";
+  | "maxSlicePct"
+  | "primerSaltoNotionalUsd";
 
 export interface FieldSpec {
   key: NumericConfigKey;
@@ -81,6 +82,14 @@ export const BOT_CONFIG_FIELDS: FieldSpec[] = [
   },
   { key: "cashReservePct", label: "Cash reserve (%)", min: 0, max: 90, step: 5, scale: 100 },
   { key: "maxSlicePct", label: "Max slice of budget (%)", min: 1, max: 100, step: 5, scale: 100 },
+  {
+    key: "primerSaltoNotionalUsd",
+    label: "Primer Salto: size per trade ($)",
+    min: 1,
+    max: 1_000_000,
+    step: 50,
+    scale: 1,
+  },
 ];
 
 /** Stored value → what the person sees in the box. */

@@ -27,29 +27,11 @@ import {
   type Stats,
   type Trade,
 } from "../src/lib/study/primer-salto";
+import { PRIMER_SALTO_UNIVERSE } from "../src/lib/study/universe";
 import type { Bar } from "../src/lib/quant/types";
 
 const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] });
 
-/** Liquid US names with a full history back to 2011, spread across sectors so
- * the result is not just one industry's decade. */
-const UNIVERSE = [
-  // Mega-cap tech
-  "AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA", "ADBE", "CRM", "ORCL", "CSCO",
-  "INTC", "AMD", "QCOM", "TXN", "AVGO", "MU", "AMAT", "IBM",
-  // Financials
-  "JPM", "BAC", "WFC", "GS", "MS", "C", "AXP", "SCHW", "BLK", "V", "MA",
-  // Healthcare
-  "JNJ", "PFE", "MRK", "ABBV", "UNH", "LLY", "TMO", "ABT", "BMY", "AMGN",
-  // Consumer
-  "WMT", "COST", "HD", "MCD", "NKE", "SBUX", "TGT", "LOW", "PG", "KO", "PEP",
-  // Industrials & energy
-  "BA", "CAT", "GE", "HON", "UPS", "LMT", "XOM", "CVX", "COP", "SLB",
-  // Other
-  "DIS", "T", "VZ", "TSLA", "NFLX",
-  // Index ETFs for reference
-  "SPY", "QQQ", "IWM", "DIA",
-];
 
 interface SymbolResult {
   symbol: string;
@@ -111,7 +93,7 @@ async function main() {
   const splitDate = arg("--split") ?? "2021-01-01";
   const splitTs = new Date(splitDate).getTime();
   const loose = process.argv.includes("--loose");
-  const symbols = (arg("--symbols")?.split(",").map((s) => s.trim().toUpperCase()) ?? UNIVERSE)
+  const symbols = (arg("--symbols")?.split(",").map((s) => s.trim().toUpperCase()) ?? [...PRIMER_SALTO_UNIVERSE])
     .filter(Boolean);
 
   const params: PrimerSaltoParams = { ...DEFAULT_PARAMS, useExhaust: !loose };

@@ -13,6 +13,10 @@ export interface BotConfigValues {
   budgetUsd: number;
   cashReservePct: number;
   maxSlicePct: number;
+  /** Primer Salto runs beside the AI rule engine, with its own on/off switch
+   * so one can be tested without the other. Both obey the same safeguards. */
+  primerSaltoEnabled: boolean;
+  primerSaltoNotionalUsd: number;
 }
 
 export const DEFAULT_BOT_CONFIG: BotConfigValues = {
@@ -27,6 +31,8 @@ export const DEFAULT_BOT_CONFIG: BotConfigValues = {
   budgetUsd: 5000,
   cashReservePct: 0.1,
   maxSlicePct: 0.2,
+  primerSaltoEnabled: false,
+  primerSaltoNotionalUsd: 400,
 };
 
 /** The exact sentence a human must type before live trading can unlock. */

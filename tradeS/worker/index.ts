@@ -20,6 +20,7 @@ async function main() {
   const { startCatchup } = await import("./catchup");
   const { startImproveRunner } = await import("./improve-runner");
   const { startDiscoveryRunner } = await import("./discovery-runner");
+  const { startPrimerSaltoRunner } = await import("./primer-salto-runner");
 
   console.log(
     `[worker] booting — paper=${env.paper} hasAlpacaKeys=${env.hasAlpacaKeys} db=${env.databasePath}`,
@@ -33,6 +34,7 @@ async function main() {
   setFillSettledHandler(() => rebuildBotTrades());
   startOrderSync();
   startBotRunner();
+  startPrimerSaltoRunner();
   startBacktestRunner();
   startTranslateRunner();
   startGauntletRunner();

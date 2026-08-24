@@ -29,6 +29,8 @@ const patchSchema = z
     budgetUsd: z.number().positive().max(10_000_000),
     cashReservePct: z.number().min(0).max(0.9),
     maxSlicePct: z.number().min(0.01).max(1),
+    primerSaltoEnabled: z.boolean(),
+    primerSaltoNotionalUsd: z.number().positive().max(1_000_000),
   })
   .partial();
 

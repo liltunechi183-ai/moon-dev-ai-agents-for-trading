@@ -461,3 +461,41 @@ export const jobs = sqliteTable(
   },
   (t) => [index("jobs_status_created_idx").on(t.status, t.createdAt)],
 );
+
+/**
+ * Positions opened by a mechanical strategy runner (currently Primer Salto),
+ * as opposed to the AI rule engine.
+ *
+ * The broker holds the stop and target server-side, so those legs survive a
+ * restart on their own. What the broker cannot express is the strategy's
+ * time limit — "give up after N sessions" — which needs the entry date and a
+ * count of trading days since. That is what this table is for; without it a
+ * restart would lose track of how long a position has been held and the time
+ * exit would silently never fire.
+ */
+export const strategyPositions = sqliteTable(
+  "strategy_positions",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    strategy: text("strategy").notNull(),
+    symbol: text("symbol").notNull(),
+    entryTs: integer("entry_ts").notNull(),
+    /** Trading date of the signal bar, YYYY-MM-DD, for counting sessions. */
+    entryDate: text("entry_date").notNull(),
+    entryOrderId: text("entry_order_id"),
+    entryPrice: real("entry_price").notNull(),
+    stopPrice: real("stop_price").notNull(),
+    targetPrice: real("target_price").notNull(),
+    maxBars: integer("max_bars").notNull(),
+    status: text("status", { enum: ["open", "closed"] })
+      .notNull()
+      .default("open"),
+    closedTs: integer("closed_ts"),
+    /** How it ended: stop/target hit at the broker, the time limit, or manual. */
+    closeReason: text("close_reason"),
+  },
+  (t) => [
+    index("strategy_positions_status_idx").on(t.status, t.strategy),
+    index("strategy_positions_symbol_idx").on(t.symbol),
+  ],
+);

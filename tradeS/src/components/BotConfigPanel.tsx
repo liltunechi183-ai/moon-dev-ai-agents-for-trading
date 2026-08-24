@@ -21,6 +21,8 @@ export interface BotConfigDto {
   budgetUsd: number;
   cashReservePct: number;
   maxSlicePct: number;
+  primerSaltoEnabled: boolean;
+  primerSaltoNotionalUsd: number;
 }
 
 
@@ -88,6 +90,26 @@ export function BotConfigPanel({
           }`}
         >
           {config.enabled ? "Enabled — click to disable" : "Disabled — click to enable"}
+        </button>
+      </div>
+
+      <div className="flex items-center justify-between rounded-md border border-white/10 bg-white/[0.02] p-3">
+        <div className="text-xs text-zinc-400">
+          <div className="font-semibold text-zinc-300">Primer Salto</div>
+          <div className="text-zinc-500">
+            Mechanical checklist, scanned once a day at 15:50 ET. Independent of the AI rules.
+          </div>
+        </div>
+        <button
+          onClick={() => save({ primerSaltoEnabled: !config.primerSaltoEnabled })}
+          disabled={saving}
+          className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${
+            config.primerSaltoEnabled
+              ? "bg-[#22c55e]/15 text-[#22c55e]"
+              : "bg-white/[0.06] text-zinc-400"
+          }`}
+        >
+          {config.primerSaltoEnabled ? "Enabled — click to disable" : "Disabled — click to enable"}
         </button>
       </div>
 

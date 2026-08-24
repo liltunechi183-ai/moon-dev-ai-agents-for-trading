@@ -12,6 +12,8 @@ import {
   averageR,
   medianDollarVolume,
   checkEligibility,
+  exitBreakdown,
+  type ExitReason,
 } from "@/lib/study/primer-salto";
 import type { Bar } from "@/lib/quant/types";
 
@@ -333,5 +335,47 @@ describe("checkEligibility", () => {
     const r = checkEligibility({ bars: bars(400, 10_000), minBars: 300, minDollarVolume: 2e7 });
     expect(r).toMatchObject({ eligible: false, why: "too-illiquid" });
     if (!r.eligible) expect(r.detail).toContain("M/day");
+  });
+});
+
+describe("exitBreakdown", () => {
+  const t = (entryIndex: number, exitIndex: number | null, exitReason: ExitReason): Trade =>
+    ({
+      entryIndex, entryTs: 0, entryPrice: 100, stopPrice: 95, targetPrice: 115,
+      exitIndex, exitTs: 0, exitPrice: 0, exitReason, returnPct: 0,
+    }) as Trade;
+
+  it("counts how each round trip ended", () => {
+    const b = exitBreakdown([t(0, 5, "stop"), t(10, 30, "target"), t(40, 60, "time")], 1);
+    expect(b.byReason).toMatchObject({ stop: 1, target: 1, time: 1, open: 0 });
+  });
+
+  it("averages the holding period over closed trades only", () => {
+    // 10 bars and 20 bars closed; the still-open one must not count as zero.
+    const b = exitBreakdown([t(0, 10, "stop"), t(0, 20, "target"), t(0, null, "open")], 1);
+    expect(b.avgBarsHeld).toBe(15);
+  });
+
+  it("turns frequency and holding period into the number that decides capacity", () => {
+    // 24 trades a year each held ~21 bars (a month) ≈ 2 positions open at once.
+    const trades = Array.from({ length: 24 }, (_, i) => t(i * 10, i * 10 + 21, "time"));
+    const b = exitBreakdown(trades, 1);
+    expect(b.avgConcurrent).toBeCloseTo(2, 1);
+  });
+
+  it("separates firing often from holding long", () => {
+    // Same 24 signals a year, held three days instead of a month: far fewer
+    // slots needed. This is why signals-per-month cannot answer "does it fit".
+    const quick = Array.from({ length: 24 }, (_, i) => t(i * 10, i * 10 + 3, "target"));
+    const slow = Array.from({ length: 24 }, (_, i) => t(i * 10, i * 10 + 21, "time"));
+    expect(exitBreakdown(quick, 1).avgConcurrent!).toBeLessThan(
+      exitBreakdown(slow, 1).avgConcurrent!,
+    );
+  });
+
+  it("reports null rather than a made-up number with nothing closed", () => {
+    const b = exitBreakdown([t(0, null, "open")], 1);
+    expect(b.avgBarsHeld).toBeNull();
+    expect(b.avgConcurrent).toBeNull();
   });
 });

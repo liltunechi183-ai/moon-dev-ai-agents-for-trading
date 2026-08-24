@@ -24,6 +24,7 @@ import {
   tradesInWindow,
   stayedProfitable,
   checkEligibility,
+  exitBreakdown,
   type PrimerSaltoParams,
   type Stats,
   type Trade,
@@ -209,6 +210,24 @@ async function main() {
   console.log(`  Win rate:           ${pct(portfolio.winRate)}`);
   console.log(`  Profit factor:      ${num(portfolio.profitFactor)}`);
   console.log(`  Average trade:      ${pct(portfolio.avgReturnPct, 2)}`);
+
+  // ── Does this universe FIT the account? ────────────────────────────────
+  // Signals per month cannot answer that on its own. What decides how many
+  // slots a universe needs is frequency TIMES holding period: ten signals a
+  // month held three days each need far fewer slots than two held two months.
+  const exits = exitBreakdown(combined, spanYears);
+  const totalTrades = combined.length || 1;
+  console.log("\n  How trades ended:");
+  for (const reason of ["target", "stop", "time", "open"] as const) {
+    const n = exits.byReason[reason];
+    console.log(
+      `    ${reason.padEnd(7)} ${String(n).padStart(5)}  ${((n / totalTrades) * 100).toFixed(1)}%`,
+    );
+  }
+  console.log(`  Average hold:       ${num(exits.avgBarsHeld, 1)} sessions`);
+  console.log(
+    `  Positions at once:  ${num(exits.avgConcurrent, 1)} on average, taking every signal`,
+  );
 
   const outCombined = combined.filter((t) => t.entryTs >= splitTs);
   const outPortfolio = summarize(

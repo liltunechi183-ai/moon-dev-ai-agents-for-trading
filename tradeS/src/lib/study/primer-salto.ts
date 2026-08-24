@@ -427,3 +427,42 @@ export function checkEligibility(input: EligibilityInput): Eligibility {
   }
   return { eligible: true, dollarVolume: dv };
 }
+
+export interface ExitBreakdown {
+  /** How many round trips ended each way. */
+  byReason: Record<ExitReason, number>;
+  /** Mean bars held, counting only closed trades. */
+  avgBarsHeld: number | null;
+  /**
+   * Positions open at once, on average, if every signal were taken:
+   * signals per year x average holding period in years. This is the number
+   * that decides whether a universe FITS an account, and it is not the same
+   * as signals per month — a strategy firing ten times a month but holding
+   * three days needs far fewer slots than one firing twice and holding two
+   * months.
+   */
+  avgConcurrent: number | null;
+}
+
+const BARS_PER_YEAR = 252;
+
+export function exitBreakdown(trades: Trade[], years: number): ExitBreakdown {
+  const byReason: Record<ExitReason, number> = { stop: 0, target: 0, time: 0, open: 0 };
+  let heldSum = 0;
+  let heldCount = 0;
+  for (const t of trades) {
+    byReason[t.exitReason] += 1;
+    if (t.exitIndex !== null) {
+      heldSum += t.exitIndex - t.entryIndex;
+      heldCount += 1;
+    }
+  }
+  const avgBarsHeld = heldCount > 0 ? heldSum / heldCount : null;
+  const perYear = years > 0 ? trades.length / years : null;
+  return {
+    byReason,
+    avgBarsHeld,
+    avgConcurrent:
+      avgBarsHeld !== null && perYear !== null ? perYear * (avgBarsHeld / BARS_PER_YEAR) : null,
+  };
+}

@@ -51,5 +51,9 @@
   "discoveries.scanNow": "Buscar ahora",
   "discoveries.scanning": "Buscando… {s}s",
   "discoveries.noPending": "No hay opciones pendientes. Ejecuta una búsqueda para encontrar nuevas.",
-  "trade.accountNumberHint": "A qué cuenta paper de Alpaca pertenecen estas claves"
+  "trade.accountNumberHint": "A qué cuenta paper de Alpaca pertenecen estas claves",
+  "bot.primerSalto.title": "Primer Salto",
+  "bot.primerSalto.blurb": "Checklist mecánico, revisado una vez al día a las 15:50 ET. Independiente de las reglas de IA.",
+  "bot.enabledClickToDisable": "Activado — clic para desactivar",
+  "bot.disabledClickToEnable": "Desactivado — clic para activar"
 }

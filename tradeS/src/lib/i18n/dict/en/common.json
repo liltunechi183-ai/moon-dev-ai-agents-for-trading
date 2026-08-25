@@ -51,5 +51,9 @@
   "discoveries.scanNow": "Scan now",
   "discoveries.scanning": "Scanning… {s}s",
   "discoveries.noPending": "No pending picks. Run a scan to hunt.",
-  "trade.accountNumberHint": "Which Alpaca paper account these keys belong to"
+  "trade.accountNumberHint": "Which Alpaca paper account these keys belong to",
+  "bot.primerSalto.title": "Primer Salto",
+  "bot.primerSalto.blurb": "Mechanical checklist, scanned once a day at 15:50 ET. Independent of the AI rules.",
+  "bot.enabledClickToDisable": "Enabled — click to disable",
+  "bot.disabledClickToEnable": "Disabled — click to enable"
 }

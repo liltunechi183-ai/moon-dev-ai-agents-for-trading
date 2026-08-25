@@ -40,6 +40,7 @@ import {
   decideForSymbol,
   decideTimeExit,
   maxConcurrentPositions,
+  scanOrder,
   tradingDate,
   toCents,
 } from "@/lib/bot/primer-salto";
@@ -168,7 +169,10 @@ export async function runPrimerSaltoTick(): Promise<void> {
   let openCount = openPositions().length;
   let bought = 0;
 
-  for (const symbol of PRIMER_SALTO_UNIVERSE) {
+  // Shuffled per day, not walked in list order: see scanOrder(). On a
+  // cluster day the slots would otherwise always go to the front of the
+  // array.
+  for (const symbol of scanOrder(PRIMER_SALTO_UNIVERSE, tradingDate(Date.now()))) {
     if (openCount >= maxConcurrent) break;
     try {
       const bars = await getDailyBars(symbol, BARS_NEEDED);

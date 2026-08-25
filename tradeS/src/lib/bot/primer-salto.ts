@@ -223,3 +223,59 @@ export function maxConcurrentPositions(totalExposureUsd: number, notionalUsd: nu
 export function toCents(price: number): number {
   return Number(price.toFixed(2));
 }
+
+/**
+ * The order to scan symbols in on a given day.
+ *
+ * This matters more than it looks. Mean reversion fires in CLUSTERS — the
+ * market sells off, dozens of names go oversold together, and then they all
+ * jump on the same day. When more signals appear than there are slots, the
+ * scan order decides which ones get taken.
+ *
+ * Walking the universe in list order hands every cluster to whatever sits at
+ * the front of the array, forever. AAPL and ABT would be bought hundreds of
+ * times and XOM never, not because they are better but because of the
+ * alphabet. That is a systematic bias with no justification behind it.
+ *
+ * There is no evidence that any symbol deserves priority — three separate
+ * studies failed to find one — so the honest choice is to give them all an
+ * equal chance. The shuffle is seeded by the trading date so a given day is
+ * reproducible (the same scan re-run gives the same answer) while the
+ * ordering varies from day to day.
+ */
+export function scanOrder(symbols: readonly string[], seedDate: string): string[] {
+  const rand = splitmix32(hashString(seedDate));
+  const out = [...symbols];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
+/**
+ * FNV-1a. A weaker hash here is not a cosmetic problem: consecutive dates
+ * differ by one character, and a poorly mixed seed makes consecutive days
+ * produce correlated shuffles — which puts the same symbols near the front
+ * over and over, reviving the very bias the shuffle exists to remove.
+ */
+function hashString(value: string): number {
+  let h = 2_166_136_261 >>> 0;
+  for (let i = 0; i < value.length; i++) {
+    h ^= value.charCodeAt(i);
+    h = Math.imul(h, 16_777_619) >>> 0;
+  }
+  return h;
+}
+
+/** splitmix32: small, fast, and well distributed from nearby seeds. */
+function splitmix32(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x9e_37_79_b9) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1) >>> 0;
+    t ^= (t + Math.imul(t ^ (t >>> 7), t | 61)) >>> 0;
+    return ((t ^ (t >>> 14)) >>> 0) / 4_294_967_296;
+  };
+}

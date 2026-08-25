@@ -226,7 +226,12 @@ async function main() {
   }
   console.log(`  Average hold:       ${num(exits.avgBarsHeld, 1)} sessions`);
   console.log(
-    `  Positions at once:  ${num(exits.avgConcurrent, 1)} on average, taking every signal`,
+    `  Positions at once:  ${num(exits.avgConcurrent, 1)} on average, ` +
+      `${exits.peakConcurrent} at the busiest moment`,
+  );
+  console.log(
+    "                      (size the account for the peak, not the average —\n" +
+      "                       mean reversion fires in clusters)",
   );
 
   const outCombined = combined.filter((t) => t.entryTs >= splitTs);

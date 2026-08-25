@@ -442,6 +442,16 @@ export interface ExitBreakdown {
    * months.
    */
   avgConcurrent: number | null;
+  /**
+   * The MOST positions open at any one moment.
+   *
+   * The average is the wrong number to size an account against, and
+   * dangerously so for a mean-reversion strategy: oversold conditions arrive
+   * market-wide, so dozens of symbols pass the checklist on the same day and
+   * then nothing fires for weeks. An account built for the average is short
+   * of slots exactly when the signals appear.
+   */
+  peakConcurrent: number;
 }
 
 const BARS_PER_YEAR = 252;
@@ -464,5 +474,28 @@ export function exitBreakdown(trades: Trade[], years: number): ExitBreakdown {
     avgBarsHeld,
     avgConcurrent:
       avgBarsHeld !== null && perYear !== null ? perYear * (avgBarsHeld / BARS_PER_YEAR) : null,
+    peakConcurrent: peakConcurrent(trades),
   };
+}
+
+/**
+ * Most positions held simultaneously, by sweeping entry and exit times in
+ * order. Exits are processed before entries at the same instant: a position
+ * closing frees its slot for one opening the same day.
+ */
+export function peakConcurrent(trades: Trade[]): number {
+  const events: Array<{ ts: number; delta: number }> = [];
+  for (const t of trades) {
+    events.push({ ts: t.entryTs, delta: 1 });
+    // A trade still open never releases its slot.
+    events.push({ ts: t.exitTs ?? Number.POSITIVE_INFINITY, delta: -1 });
+  }
+  events.sort((a, b) => (a.ts === b.ts ? a.delta - b.delta : a.ts - b.ts));
+  let open = 0;
+  let peak = 0;
+  for (const e of events) {
+    open += e.delta;
+    peak = Math.max(peak, open);
+  }
+  return peak;
 }

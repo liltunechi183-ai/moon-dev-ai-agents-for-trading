@@ -7,6 +7,7 @@ import {
   sharesFor,
   decideForSymbol,
   maxConcurrentPositions,
+  scanOrder,
   toCents,
 } from "@/lib/bot/primer-salto";
 import { computeSignals, DEFAULT_PARAMS } from "@/lib/study/primer-salto";
@@ -217,5 +218,44 @@ describe("toCents", () => {
   it("rounds to the precision a broker will accept", () => {
     expect(toCents(12.3456)).toBe(12.35);
     expect(toCents(99.999)).toBe(100);
+  });
+});
+
+describe("scanOrder", () => {
+  const universe = ["AAPL", "ABT", "MSFT", "XOM", "VZ", "JPM", "KO", "PG"];
+
+  it("keeps every symbol exactly once — a shuffle, not a filter", () => {
+    const out = scanOrder(universe, "2024-03-01");
+    expect(out).toHaveLength(universe.length);
+    expect([...out].sort()).toEqual([...universe].sort());
+  });
+
+  it("is reproducible for a given day, so re-running a scan agrees with itself", () => {
+    expect(scanOrder(universe, "2024-03-01")).toEqual(scanOrder(universe, "2024-03-01"));
+  });
+
+  it("changes from day to day", () => {
+    expect(scanOrder(universe, "2024-03-01")).not.toEqual(scanOrder(universe, "2024-03-04"));
+  });
+
+  it("regression: the last symbol gets picked as often as the first", () => {
+    // In list order XOM would never be reached when slots fill early. Over
+    // many days each symbol should land in the first two slots at a broadly
+    // similar rate — the point is that none is structurally shut out.
+    const firstTwo = new Map<string, number>(universe.map((s) => [s, 0]));
+    for (let day = 1; day <= 600; day++) {
+      const date = `2024-${String((day % 12) + 1).padStart(2, "0")}-${String((day % 28) + 1).padStart(2, "0")}-${day}`;
+      for (const s of scanOrder(universe, date).slice(0, 2)) {
+        firstTwo.set(s, (firstTwo.get(s) ?? 0) + 1);
+      }
+    }
+    const counts = [...firstTwo.values()];
+    expect(Math.min(...counts)).toBeGreaterThan(0);
+    // No symbol should take more than double the share of the least-picked.
+    expect(Math.max(...counts) / Math.min(...counts)).toBeLessThan(2);
+  });
+
+  it("handles an empty universe without throwing", () => {
+    expect(scanOrder([], "2024-03-01")).toEqual([]);
   });
 });

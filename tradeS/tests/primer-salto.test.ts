@@ -13,6 +13,7 @@ import {
   medianDollarVolume,
   checkEligibility,
   exitBreakdown,
+  peakConcurrent,
   type ExitReason,
 } from "@/lib/study/primer-salto";
 import type { Bar } from "@/lib/quant/types";
@@ -377,5 +378,44 @@ describe("exitBreakdown", () => {
     const b = exitBreakdown([t(0, null, "open")], 1);
     expect(b.avgBarsHeld).toBeNull();
     expect(b.avgConcurrent).toBeNull();
+  });
+});
+
+describe("peakConcurrent", () => {
+  const t = (entryTs: number, exitTs: number | null): Trade =>
+    ({
+      entryIndex: 0, entryTs, entryPrice: 100, stopPrice: 95, targetPrice: 115,
+      exitIndex: 1, exitTs, exitPrice: 0, exitReason: exitTs === null ? "open" : "target",
+      returnPct: 0,
+    }) as Trade;
+
+  it("counts the deepest overlap, not the average", () => {
+    // Three trades all open across day 5.
+    expect(peakConcurrent([t(1, 10), t(2, 11), t(3, 12)])).toBe(3);
+  });
+
+  it("frees a slot when one closes before the next opens", () => {
+    expect(peakConcurrent([t(1, 5), t(6, 10), t(11, 15)])).toBe(1);
+  });
+
+  it("lets a position closing today make room for one opening today", () => {
+    // Same instant: the exit is processed first, so this needs one slot.
+    expect(peakConcurrent([t(1, 5), t(5, 9)])).toBe(1);
+  });
+
+  it("catches the cluster an average would hide", () => {
+    // Twenty signals in one week, then a long quiet stretch. The mean over
+    // the year is near zero; the account still needs twenty slots that week.
+    const cluster = Array.from({ length: 20 }, (_, i) => t(100 + i, 200 + i));
+    const lonely = [t(10_000, 10_100)];
+    expect(peakConcurrent([...cluster, ...lonely])).toBe(20);
+  });
+
+  it("never releases the slot of a position that is still open", () => {
+    expect(peakConcurrent([t(1, null), t(2, 3), t(4, 5)])).toBe(2);
+  });
+
+  it("is zero with no trades", () => {
+    expect(peakConcurrent([])).toBe(0);
   });
 });

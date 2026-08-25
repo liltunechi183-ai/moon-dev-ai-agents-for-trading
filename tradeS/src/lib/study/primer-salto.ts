@@ -499,3 +499,46 @@ export function peakConcurrent(trades: Trade[]): number {
   }
   return peak;
 }
+
+export interface CapacityResult {
+  /** The trades a slot was actually free for. */
+  taken: Trade[];
+  /** Signals that arrived with every slot occupied. */
+  skipped: number;
+  slots: number;
+}
+
+/**
+ * Replay the signals against a FIXED number of position slots.
+ *
+ * Every backtest above is capital-unconstrained: it takes every signal, so a
+ * day with fifty simultaneous signals contributes fifty trades. A real
+ * account with six slots takes six of them. That gap is not a rounding
+ * error for a strategy that fires in clusters — and the clusters are market
+ * panics, which is plausibly where the best entries live, so the constraint
+ * bites hardest exactly when it costs most.
+ *
+ * Which signals get taken when more arrive than fit is decided by the order
+ * of `trades`. Pass them shuffled within each day: taking them in symbol
+ * order would hand every cluster to the front of the alphabet, the same bias
+ * the live runner had to fix.
+ */
+export function simulateWithSlots(trades: Trade[], slots: number): CapacityResult {
+  if (slots <= 0) return { taken: [], skipped: trades.length, slots };
+  const ordered = [...trades].sort((a, b) => a.entryTs - b.entryTs);
+  const taken: Trade[] = [];
+  // Exit times of the positions currently held.
+  let openExits: number[] = [];
+  let skipped = 0;
+
+  for (const trade of ordered) {
+    openExits = openExits.filter((exitTs) => exitTs > trade.entryTs);
+    if (openExits.length >= slots) {
+      skipped += 1;
+      continue;
+    }
+    taken.push(trade);
+    openExits.push(trade.exitTs ?? Number.POSITIVE_INFINITY);
+  }
+  return { taken, skipped, slots };
+}

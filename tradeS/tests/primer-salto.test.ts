@@ -14,6 +14,7 @@ import {
   checkEligibility,
   exitBreakdown,
   peakConcurrent,
+  simulateWithSlots,
   type ExitReason,
 } from "@/lib/study/primer-salto";
 import type { Bar } from "@/lib/quant/types";
@@ -417,5 +418,59 @@ describe("peakConcurrent", () => {
 
   it("is zero with no trades", () => {
     expect(peakConcurrent([])).toBe(0);
+  });
+});
+
+describe("simulateWithSlots", () => {
+  const t = (entryTs: number, exitTs: number | null, returnPct = 0.02): Trade =>
+    ({
+      entryIndex: 0, entryTs, entryPrice: 100, stopPrice: 95, targetPrice: 115,
+      exitIndex: 1, exitTs, exitPrice: 0, exitReason: "target", returnPct,
+    }) as Trade;
+
+  it("takes everything when slots are never the binding constraint", () => {
+    const r = simulateWithSlots([t(1, 5), t(6, 10), t(11, 15)], 6);
+    expect(r.taken).toHaveLength(3);
+    expect(r.skipped).toBe(0);
+  });
+
+  it("skips the signals that arrive with every slot full", () => {
+    // Five signals on the same day, two slots.
+    const r = simulateWithSlots([t(1, 100), t(1, 100), t(1, 100), t(1, 100), t(1, 100)], 2);
+    expect(r.taken).toHaveLength(2);
+    expect(r.skipped).toBe(3);
+  });
+
+  it("frees a slot once a position closes", () => {
+    const r = simulateWithSlots([t(1, 5), t(2, 6), t(7, 10)], 2);
+    expect(r.taken).toHaveLength(3);
+    expect(r.skipped).toBe(0);
+  });
+
+  it("shows what a cluster costs a small account", () => {
+    // Fifty signals at once against six slots: the backtest counts fifty
+    // trades, the account gets six.
+    const cluster = Array.from({ length: 50 }, () => t(1, 500));
+    const r = simulateWithSlots(cluster, 6);
+    expect(r.taken).toHaveLength(6);
+    expect(r.skipped).toBe(44);
+  });
+
+  it("respects the order it is given, since that decides who gets the slot", () => {
+    const good = t(1, 100, 0.5);
+    const bad = t(1, 100, -0.5);
+    expect(simulateWithSlots([good, bad], 1).taken[0].returnPct).toBe(0.5);
+    expect(simulateWithSlots([bad, good], 1).taken[0].returnPct).toBe(-0.5);
+  });
+
+  it("never holds a position that has not closed against a later slot", () => {
+    // The first trade never exits, so it occupies its slot forever.
+    const r = simulateWithSlots([t(1, null), t(2, 3), t(4, 5)], 1);
+    expect(r.taken).toHaveLength(1);
+    expect(r.skipped).toBe(2);
+  });
+
+  it("takes nothing with no slots", () => {
+    expect(simulateWithSlots([t(1, 5)], 0)).toMatchObject({ skipped: 1, slots: 0 });
   });
 });

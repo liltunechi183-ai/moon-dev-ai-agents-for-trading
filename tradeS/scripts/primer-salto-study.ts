@@ -25,6 +25,7 @@ import {
   stayedProfitable,
   checkEligibility,
   exitBreakdown,
+  simulateWithSlots,
   type PrimerSaltoParams,
   type Stats,
   type Trade,
@@ -232,6 +233,36 @@ async function main() {
   console.log(
     "                      (size the account for the peak, not the average —\n" +
       "                       mean reversion fires in clusters)",
+  );
+
+  // ── What the account would ACTUALLY have got ──────────────────────────
+  // Everything above assumes unlimited capital. Replay the same signals
+  // against a real slot count, taking them in a shuffled order within each
+  // day so the alphabet does not decide who gets in.
+  const slotOptions = (arg("--slots") ?? "4,6,8,12").split(",").map(Number).filter((n) => n > 0);
+  const shuffled = [...combined];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(((i * 9301 + 49_297) % 233_280) / 233_280 * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  console.log("\n  With a limited number of position slots:");
+  console.log(
+    `    ${"SLOTS".padStart(6)} ${"TAKEN".padStart(7)} ${"SKIPPED".padStart(8)} ` +
+      `${"PF".padStart(6)} ${"AVG".padStart(8)}`,
+  );
+  for (const slots of slotOptions) {
+    const cap = simulateWithSlots(shuffled, slots);
+    const capStats = summarize(cap.taken, spanYears);
+    console.log(
+      `    ${String(slots).padStart(6)} ${String(cap.taken.length).padStart(7)} ` +
+        `${String(cap.skipped).padStart(8)} ${num(capStats.profitFactor).padStart(6)} ` +
+        `${pct(capStats.avgReturnPct, 2).padStart(8)}`,
+    );
+  }
+  console.log(
+    `    ${"∞".padStart(6)} ${String(combined.length).padStart(7)} ${"0".padStart(8)} ` +
+      `${num(portfolio.profitFactor).padStart(6)} ${pct(portfolio.avgReturnPct, 2).padStart(8)}` +
+      "   ← what the backtest above assumes",
   );
 
   const outCombined = combined.filter((t) => t.entryTs >= splitTs);

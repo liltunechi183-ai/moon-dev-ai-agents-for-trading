@@ -40,14 +40,16 @@ import {
   decideForSymbol,
   decideTimeExit,
   maxConcurrentPositions,
+  marketContext,
   scanOrder,
   tradingDate,
   toCents,
 } from "@/lib/bot/primer-salto";
 import { DEFAULT_PARAMS } from "@/lib/study/primer-salto";
 
-/** Enough history for the 40-period mean plus the trend window. */
-const BARS_NEEDED = 160;
+/** Enough for the 40-period mean, the trend window, AND the 52-week high
+ * recorded as context on every entry. */
+const BARS_NEEDED = 280;
 /** Yahoo is polite but 69 symbols back to back is not. */
 const FETCH_GAP_MS = 150;
 
@@ -163,6 +165,9 @@ export async function runPrimerSaltoTick(): Promise<void> {
   // But a year from now the only way to ask "did this work better in a bull
   // market?" is to have written it down at the time.
   const regime = await getCurrentRegime().catch(() => null);
+  const market = await getDailyBars("SPY", 260)
+    .then((bars) => marketContext(bars.map((b) => b.close)))
+    .catch(() => ({ spyAboveMa200: null, spyAboveMa20: null }));
 
   const notionalUsd = config.primerSaltoNotionalUsd;
   const maxConcurrent = maxConcurrentPositions(config.maxTotalExposureUsd, notionalUsd);
@@ -182,12 +187,15 @@ export async function runPrimerSaltoTick(): Promise<void> {
         openStrategyPositions: openCount,
         maxConcurrent,
         notionalUsd,
+        equity,
+        riskPct: config.primerSaltoRiskPct,
+        maxPositionUsd: Math.min(config.maxPositionUsd, notionalUsd),
         params: DEFAULT_PARAMS,
       });
       if (decision.act === "skip") continue;
 
-      const { plan, shares } = decision;
-      const orderNotionalUsd = shares * plan.price;
+      const { plan, shares, sizing } = decision;
+      const orderNotionalUsd = sizing.notionalUsd;
 
       // The same gate the AI bot passes through. predictionAgeMs is 0: this
       // order is driven by a bar from minutes ago, not by a stored forecast,
@@ -251,15 +259,16 @@ export async function runPrimerSaltoTick(): Promise<void> {
         .run();
 
       const reason =
-        `checklist met — ${shares} shares (~$${orderNotionalUsd.toFixed(0)}), ` +
-        `stop $${toCents(plan.stopPrice)}, target $${toCents(plan.targetPrice)} (3R)`;
+        `checklist met — ${shares} shares (~$${orderNotionalUsd.toFixed(0)}, ` +
+        `risking $${sizing.riskUsd.toFixed(0)}, bound by ${sizing.boundBy}), ` +
+        `stop $${toCents(plan.stopPrice)}, target $${toCents(plan.targetPrice)}`;
       notify({ kind: "buy", symbol, reason: `Primer Salto — ${reason}` });
       logActivity({
         symbol,
         decision: "buy",
         reason,
         orderId: order.id,
-        snapshot: { ...plan, regime, shares, orderNotionalUsd },
+        snapshot: { ...plan, regime, ...market, sizing, shares, orderNotionalUsd },
       });
       openCount += 1;
       bought += 1;

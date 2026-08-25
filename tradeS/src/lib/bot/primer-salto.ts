@@ -43,6 +43,40 @@ export interface EntryContext {
   distanceFromSlowMaPct: number | null;
   /** Whether the exhaustion rule was in force for this signal. */
   strictMode: boolean;
+  /** How far below its own 52-week high the stock had fallen, as a fraction. */
+  pctOff52WeekHigh: number | null;
+}
+
+/** Market-wide backdrop at the moment of entry, recorded alongside the trade. */
+export interface MarketContext {
+  spyAboveMa200: boolean | null;
+  spyAboveMa20: boolean | null;
+}
+
+/** Is SPY above the given moving average right now? */
+export function marketContext(spyCloses: number[]): MarketContext {
+  const meanOf = (n: number): number | null => {
+    if (spyCloses.length < n) return null;
+    const slice = spyCloses.slice(-n);
+    return slice.reduce((a, b) => a + b, 0) / n;
+  };
+  const last = spyCloses.length > 0 ? spyCloses[spyCloses.length - 1] : null;
+  const ma200 = meanOf(200);
+  const ma20 = meanOf(20);
+  return {
+    spyAboveMa200: last === null || ma200 === null ? null : last > ma200,
+    spyAboveMa20: last === null || ma20 === null ? null : last > ma20,
+  };
+}
+
+/** Drawdown from the highest high of the last `lookback` bars. */
+export function pctOffHigh(bars: Bar[], lookback = 252): number | null {
+  const window = bars.slice(-lookback);
+  if (window.length === 0) return null;
+  const high = Math.max(...window.map((b) => b.high));
+  const last = window[window.length - 1].close;
+  if (high <= 0) return null;
+  return (last - high) / high;
 }
 
 export interface EntryPlan {
@@ -95,6 +129,7 @@ export function planEntry(
       stopDistancePct: riskPerShare / bar.close,
       distanceFromSlowMaPct: slow !== null && slow > 0 ? (bar.close - slow) / slow : null,
       strictMode: params.useExhaust,
+      pctOff52WeekHigh: pctOffHigh(bars),
     },
   };
 }
@@ -140,6 +175,58 @@ export function decideTimeExit(
   return { close: false, reason: `held ${held} of ${position.maxBars} sessions` };
 }
 
+export interface RiskSizingInput {
+  equity: number;
+  /** Fraction of equity to put at risk, e.g. 0.005 for 0.5%. */
+  riskPct: number;
+  entryPrice: number;
+  stopPrice: number;
+  /** Hard ceiling on position value, whatever the risk maths says. */
+  maxPositionUsd: number;
+}
+
+export interface Sizing {
+  shares: number;
+  notionalUsd: number;
+  /** Dollars actually at risk if the stop fills. */
+  riskUsd: number;
+  /** Which constraint decided the size, for the activity log. */
+  boundBy: "risk" | "position-cap" | "none";
+}
+
+/**
+ * Size a position by the risk it carries rather than the dollars it costs.
+ *
+ * With a fixed dollar size, a name whose stop sits 10% away risks two and a
+ * half times as much as one whose stop is 4% away, for no reason anybody
+ * chose. Sizing off the stop distance equalises that.
+ *
+ * The position cap is not decoration. On a small account the risk maths can
+ * ask for far more than the account holds: risking 2% of $3,000 behind a 4%
+ * stop wants a $1,500 position — half the account in one name, and six of
+ * those is $9,000 of exposure on $3,000 of cash, which is margin whatever
+ * else it is called. The cap is what keeps the arithmetic honest, and when
+ * it binds the effective risk is lower than the configured percentage.
+ */
+export function riskBasedShares(input: RiskSizingInput): Sizing {
+  const riskPerShare = input.entryPrice - input.stopPrice;
+  if (riskPerShare <= 0 || input.entryPrice <= 0 || input.riskPct <= 0 || input.equity <= 0) {
+    return { shares: 0, notionalUsd: 0, riskUsd: 0, boundBy: "none" };
+  }
+
+  const riskBudget = input.equity * input.riskPct;
+  const byRisk = Math.floor(riskBudget / riskPerShare);
+  const byCap = Math.floor(input.maxPositionUsd / input.entryPrice);
+  const shares = Math.max(0, Math.min(byRisk, byCap));
+
+  return {
+    shares,
+    notionalUsd: shares * input.entryPrice,
+    riskUsd: shares * riskPerShare,
+    boundBy: shares === 0 ? "none" : byCap < byRisk ? "position-cap" : "risk",
+  };
+}
+
 /** Whole shares only; Alpaca brackets cannot take fractions. */
 export function sharesFor(notionalUsd: number, price: number): number {
   if (price <= 0) return 0;
@@ -154,7 +241,7 @@ export type SkipReason =
   | "too-small";
 
 export type SymbolDecision =
-  | { act: "buy"; plan: EntryPlan; shares: number }
+  | { act: "buy"; plan: EntryPlan; shares: number; sizing: Sizing }
   | { act: "skip"; why: SkipReason; detail: string };
 
 export interface DecideInput {
@@ -162,7 +249,14 @@ export interface DecideInput {
   hasPosition: boolean;
   openStrategyPositions: number;
   maxConcurrent: number;
+  /** Fixed dollars per trade, used when riskPct is 0. */
   notionalUsd: number;
+  /** Account equity, for risk-based sizing. */
+  equity?: number;
+  /** Fraction of equity to risk per trade. 0 keeps the fixed-dollar path. */
+  riskPct?: number;
+  /** Ceiling on position value under risk sizing. */
+  maxPositionUsd?: number;
   params?: PrimerSaltoParams;
   /** Bars needed before the indicators mean anything. */
   minBars?: number;
@@ -197,15 +291,31 @@ export function decideForSymbol(input: DecideInput): SymbolDecision {
   const plan = planEntry(input.bars, input.params);
   if (!plan) return { act: "skip", why: "no-signal", detail: "checklist not met on the last bar" };
 
-  const shares = sharesFor(input.notionalUsd, plan.price);
-  if (shares < 1) {
+  const useRisk = (input.riskPct ?? 0) > 0 && (input.equity ?? 0) > 0;
+  const sizing: Sizing = useRisk
+    ? riskBasedShares({
+        equity: input.equity!,
+        riskPct: input.riskPct!,
+        entryPrice: plan.price,
+        stopPrice: plan.stopPrice,
+        maxPositionUsd: input.maxPositionUsd ?? input.notionalUsd,
+      })
+    : {
+        shares: sharesFor(input.notionalUsd, plan.price),
+        notionalUsd: sharesFor(input.notionalUsd, plan.price) * plan.price,
+        riskUsd: sharesFor(input.notionalUsd, plan.price) * plan.riskPerShare,
+        boundBy: "none",
+      };
+
+  if (sizing.shares < 1) {
+    const budget = useRisk ? (input.maxPositionUsd ?? input.notionalUsd) : input.notionalUsd;
     return {
       act: "skip",
       why: "too-small",
-      detail: `$${input.notionalUsd} buys less than one share at $${plan.price.toFixed(2)}`,
+      detail: `$${budget} buys less than one share at $${plan.price.toFixed(2)}`,
     };
   }
-  return { act: "buy", plan, shares };
+  return { act: "buy", plan, shares: sizing.shares, sizing };
 }
 
 /**

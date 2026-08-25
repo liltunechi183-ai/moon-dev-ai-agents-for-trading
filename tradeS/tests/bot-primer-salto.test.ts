@@ -8,6 +8,9 @@ import {
   decideForSymbol,
   maxConcurrentPositions,
   scanOrder,
+  riskBasedShares,
+  marketContext,
+  pctOffHigh,
   toCents,
 } from "@/lib/bot/primer-salto";
 import { computeSignals, DEFAULT_PARAMS } from "@/lib/study/primer-salto";
@@ -257,5 +260,139 @@ describe("scanOrder", () => {
 
   it("handles an empty universe without throwing", () => {
     expect(scanOrder([], "2024-03-01")).toEqual([]);
+  });
+});
+
+describe("riskBasedShares", () => {
+  const base = { equity: 3000, riskPct: 0.005, entryPrice: 100, stopPrice: 96, maxPositionUsd: 600 };
+
+  it("puts the configured fraction of equity behind the stop", () => {
+    // 0.5% of $3,000 is $15; the stop is $4 away, so 3 shares risk $12.
+    const s = riskBasedShares(base);
+    expect(s.shares).toBe(3);
+    expect(s.riskUsd).toBeCloseTo(12, 6);
+    expect(s.boundBy).toBe("risk");
+  });
+
+  it("equalises risk across stops of different width — the point of the exercise", () => {
+    // A 10%-stop name and a 4%-stop name should risk about the same amount,
+    // which fixed dollars would not do.
+    const tight = riskBasedShares({ ...base, stopPrice: 96, maxPositionUsd: 100_000 });
+    const wide = riskBasedShares({ ...base, stopPrice: 90, maxPositionUsd: 100_000 });
+    expect(Math.abs(tight.riskUsd - wide.riskUsd)).toBeLessThan(base.entryPrice * 0.1);
+    expect(wide.notionalUsd).toBeLessThan(tight.notionalUsd);
+  });
+
+  it("regression: the cap stops the risk maths asking for half the account", () => {
+    // 2% of $3,000 behind a 4% stop wants $1,500 — half the account in one
+    // name. The cap must win.
+    const s = riskBasedShares({ ...base, riskPct: 0.02, maxPositionUsd: 600 });
+    expect(s.notionalUsd).toBeLessThanOrEqual(600);
+    expect(s.boundBy).toBe("position-cap");
+  });
+
+  it("reports the risk actually taken, which is lower when the cap binds", () => {
+    const s = riskBasedShares({ ...base, riskPct: 0.02, maxPositionUsd: 600 });
+    // 6 shares x $4 = $24, well under the $60 the 2% asked for.
+    expect(s.riskUsd).toBeLessThan(3000 * 0.02);
+  });
+
+  it("buys nothing rather than guessing when the stop is not below the entry", () => {
+    expect(riskBasedShares({ ...base, stopPrice: 100 }).shares).toBe(0);
+    expect(riskBasedShares({ ...base, stopPrice: 105 }).shares).toBe(0);
+  });
+
+  it("buys nothing on nonsense inputs instead of dividing by zero", () => {
+    expect(riskBasedShares({ ...base, equity: 0 }).shares).toBe(0);
+    expect(riskBasedShares({ ...base, riskPct: 0 }).shares).toBe(0);
+    expect(riskBasedShares({ ...base, entryPrice: 0 }).shares).toBe(0);
+  });
+
+  it("never returns fractional shares", () => {
+    const s = riskBasedShares({ ...base, entryPrice: 97.37, stopPrice: 93.11 });
+    expect(Number.isInteger(s.shares)).toBe(true);
+  });
+});
+
+describe("decideForSymbol — sizing method", () => {
+  const bars = signalBars();
+  const base = {
+    bars,
+    hasPosition: false,
+    openStrategyPositions: 0,
+    maxConcurrent: 6,
+    notionalUsd: 400,
+  };
+
+  it("keeps the fixed-dollar path when no risk percentage is set", () => {
+    const d = decideForSymbol(base);
+    expect(d.act).toBe("buy");
+    if (d.act === "buy") expect(d.sizing.boundBy).toBe("none");
+  });
+
+  it("switches to risk sizing once a risk percentage is given", () => {
+    const d = decideForSymbol({ ...base, equity: 3000, riskPct: 0.005, maxPositionUsd: 600 });
+    expect(d.act).toBe("buy");
+    if (d.act === "buy") {
+      expect(["risk", "position-cap"]).toContain(d.sizing.boundBy);
+      expect(d.sizing.notionalUsd).toBeLessThanOrEqual(600);
+    }
+  });
+
+  it("still refuses a position it cannot afford one share of", () => {
+    const d = decideForSymbol({ ...base, equity: 3000, riskPct: 0.005, maxPositionUsd: 5 });
+    expect(d).toMatchObject({ act: "skip", why: "too-small" });
+  });
+});
+
+describe("marketContext", () => {
+  const rising = Array.from({ length: 260 }, (_, i) => 100 + i * 0.5);
+
+  it("reports SPY above both means in an uptrend", () => {
+    expect(marketContext(rising)).toEqual({ spyAboveMa200: true, spyAboveMa20: true });
+  });
+
+  it("reports below both after a fall", () => {
+    const c = marketContext([...rising, ...Array.from({ length: 30 }, () => 50)]);
+    expect(c).toEqual({ spyAboveMa200: false, spyAboveMa20: false });
+  });
+
+  it("separates the two horizons — a dip breaks the 20 before the 200", () => {
+    // Down enough to lose the 20-day, not enough to lose the 200-day.
+    const dip = [...rising, ...Array.from({ length: 5 }, () => 215)];
+    const c = marketContext(dip);
+    expect(c.spyAboveMa20).toBe(false);
+    expect(c.spyAboveMa200).toBe(true);
+  });
+
+  it("says null rather than guessing without enough history", () => {
+    expect(marketContext([100, 101])).toEqual({ spyAboveMa200: null, spyAboveMa20: null });
+    expect(marketContext([])).toEqual({ spyAboveMa200: null, spyAboveMa20: null });
+  });
+});
+
+describe("pctOffHigh", () => {
+  const bar = (close: number, high = close): Bar => ({
+    ts: 0, open: close, high, low: close, close, volume: 1e6,
+  });
+
+  it("measures the fall from the highest high in the window", () => {
+    // High of 100, now at 80: 20% off.
+    expect(pctOffHigh([bar(100), bar(90), bar(80)])).toBeCloseTo(-0.2, 6);
+  });
+
+  it("is zero at a fresh high", () => {
+    expect(pctOffHigh([bar(80), bar(90), bar(100)])).toBeCloseTo(0, 6);
+  });
+
+  it("only looks back over the window given", () => {
+    const old = Array.from({ length: 300 }, () => bar(500));
+    const recent = Array.from({ length: 252 }, () => bar(100));
+    // The 500s are outside a 252-bar window, so this is not 80% off.
+    expect(pctOffHigh([...old, ...recent], 252)).toBeCloseTo(0, 6);
+  });
+
+  it("returns null with nothing to measure", () => {
+    expect(pctOffHigh([])).toBeNull();
   });
 });

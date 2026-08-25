@@ -24,6 +24,7 @@ export interface BotConfigDto {
   maxSlicePct: number;
   primerSaltoEnabled: boolean;
   primerSaltoNotionalUsd: number;
+  primerSaltoRiskPct: number;
 }
 
 

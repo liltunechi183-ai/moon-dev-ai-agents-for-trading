@@ -17,6 +17,13 @@ export interface BotConfigValues {
    * so one can be tested without the other. Both obey the same safeguards. */
   primerSaltoEnabled: boolean;
   primerSaltoNotionalUsd: number;
+  /**
+   * Fraction of equity to risk per Primer Salto trade. 0 keeps the simple
+   * fixed-dollar path. The position cap still applies on top, and on a small
+   * account it will usually be what binds — 2% of $3,000 behind a typical 4%
+   * stop asks for a $1,500 position, which is half the account.
+   */
+  primerSaltoRiskPct: number;
 }
 
 export const DEFAULT_BOT_CONFIG: BotConfigValues = {
@@ -33,6 +40,7 @@ export const DEFAULT_BOT_CONFIG: BotConfigValues = {
   maxSlicePct: 0.2,
   primerSaltoEnabled: false,
   primerSaltoNotionalUsd: 400,
+  primerSaltoRiskPct: 0,
 };
 
 /** The exact sentence a human must type before live trading can unlock. */

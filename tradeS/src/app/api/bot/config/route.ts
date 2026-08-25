@@ -31,6 +31,7 @@ const patchSchema = z
     maxSlicePct: z.number().min(0.01).max(1),
     primerSaltoEnabled: z.boolean(),
     primerSaltoNotionalUsd: z.number().positive().max(1_000_000),
+    primerSaltoRiskPct: z.number().min(0).max(0.05),
   })
   .partial();
 

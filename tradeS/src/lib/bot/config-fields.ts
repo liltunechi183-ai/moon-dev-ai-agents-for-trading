@@ -21,7 +21,8 @@ export type NumericConfigKey =
   | "minConfidence"
   | "cashReservePct"
   | "maxSlicePct"
-  | "primerSaltoNotionalUsd";
+  | "primerSaltoNotionalUsd"
+  | "primerSaltoRiskPct";
 
 export interface FieldSpec {
   key: NumericConfigKey;
@@ -89,6 +90,14 @@ export const BOT_CONFIG_FIELDS: FieldSpec[] = [
     max: 1_000_000,
     step: 50,
     scale: 1,
+  },
+  {
+    key: "primerSaltoRiskPct",
+    label: "Primer Salto: risk per trade (%, 0 = fixed $)",
+    min: 0,
+    max: 5,
+    step: 0.25,
+    scale: 100,
   },
 ];
 

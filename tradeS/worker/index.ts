@@ -5,6 +5,12 @@ async function main() {
   const { env, guardAnthropicKey } = await import("@/lib/env");
   guardAnthropicKey();
 
+  // Before anything opens a socket or schedules a job: a second worker sends
+  // duplicate orders, so it is refused here rather than discovered later in
+  // the position list.
+  const { claimSingleInstance } = await import("./single-instance");
+  await claimSingleInstance(env.databasePath);
+
   const { startPriceStream } = await import("./price-stream");
   const { startYahooPoller } = await import("./yahoo-poller");
   const { startSignalRunner } = await import("./signal-runner");

@@ -12,6 +12,7 @@ import {
   marketContext,
   pctOffHigh,
   toCents,
+  scanSummary,
 } from "@/lib/bot/primer-salto";
 import { computeSignals, DEFAULT_PARAMS } from "@/lib/study/primer-salto";
 import type { Bar } from "@/lib/quant/types";
@@ -394,5 +395,49 @@ describe("pctOffHigh", () => {
 
   it("returns null with nothing to measure", () => {
     expect(pctOffHigh([])).toBeNull();
+  });
+});
+
+describe("scanSummary", () => {
+  const tally = {
+    universe: 69,
+    scanned: 69,
+    fetchFailures: 0,
+    bought: 0,
+    openCount: 0,
+    maxConcurrent: 4,
+  };
+
+  it("says the scan happened even when nothing was bought", () => {
+    // The whole point: a silent day must leave a record. At 2.4 entries a
+    // month this is by far the most common outcome.
+    const line = scanSummary(tally);
+    expect(line).toContain("69 of 69 symbol(s) read");
+    expect(line).toContain("0 new position(s)");
+    expect(line).toContain("0/4 slots used");
+    expect(line).not.toContain("failure");
+    expect(line).not.toContain("stopped early");
+  });
+
+  it("distinguishes a quiet day from a data outage", () => {
+    const quiet = scanSummary(tally);
+    const outage = scanSummary({ ...tally, scanned: 0, fetchFailures: 69 });
+    // Both bought nothing. They must not read the same.
+    expect(outage).not.toEqual(quiet);
+    expect(outage).toContain("0 of 69 symbol(s) read");
+    expect(outage).toContain("69 fetch failure(s)");
+  });
+
+  it("flags a universe left half-examined because the slots filled", () => {
+    const line = scanSummary({ ...tally, scanned: 12, bought: 4, openCount: 4 });
+    expect(line).toContain("12 of 69 symbol(s) read");
+    expect(line).toContain("stopped early: all slots full");
+  });
+
+  it("does not cry 'stopped early' when failures account for the shortfall", () => {
+    // 60 read + 9 failed = all 69 attempted. The loop ran to the end.
+    const line = scanSummary({ ...tally, scanned: 60, fetchFailures: 9 });
+    expect(line).toContain("9 fetch failure(s)");
+    expect(line).not.toContain("stopped early");
   });
 });

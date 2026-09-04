@@ -42,6 +42,7 @@ import {
   maxConcurrentPositions,
   marketContext,
   scanOrder,
+  scanSummary,
   tradingDate,
   toCents,
 } from "@/lib/bot/primer-salto";
@@ -121,6 +122,7 @@ export async function runPrimerSaltoTick(): Promise<void> {
   ]);
   if (!clock.is_open) {
     console.log("[primer-salto] market closed — nothing to do");
+    logActivity({ decision: "skip", reason: "market closed — no scan" });
     return;
   }
 
@@ -173,14 +175,19 @@ export async function runPrimerSaltoTick(): Promise<void> {
   const maxConcurrent = maxConcurrentPositions(config.maxTotalExposureUsd, notionalUsd);
   let openCount = openPositions().length;
   let bought = 0;
+  let scanned = 0;
+  let fetchFailures = 0;
 
   // Shuffled per day, not walked in list order: see scanOrder(). On a
   // cluster day the slots would otherwise always go to the front of the
   // array.
   for (const symbol of scanOrder(PRIMER_SALTO_UNIVERSE, tradingDate(Date.now()))) {
     if (openCount >= maxConcurrent) break;
+    let read = false;
     try {
       const bars = await getDailyBars(symbol, BARS_NEEDED);
+      read = true;
+      scanned += 1;
       const decision = decideForSymbol({
         bars,
         hasPosition: held.has(symbol),
@@ -273,14 +280,25 @@ export async function runPrimerSaltoTick(): Promise<void> {
       openCount += 1;
       bought += 1;
     } catch (err) {
+      // Only a throw BEFORE the bars came back means the symbol went unread.
+      // A throw after that is an order that did not go through — a different
+      // problem, and one that must not be reported as a data outage.
+      if (!read) fetchFailures += 1;
       console.error(`[primer-salto] ${symbol} failed:`, err);
     }
     await sleep(FETCH_GAP_MS);
   }
 
-  console.log(
-    `[primer-salto] scan done — ${bought} new position(s), ${openCount}/${maxConcurrent} slots used`,
-  );
+  const summary = scanSummary({
+    universe: PRIMER_SALTO_UNIVERSE.length,
+    scanned,
+    fetchFailures,
+    bought,
+    openCount,
+    maxConcurrent,
+  });
+  console.log(`[primer-salto] ${summary}`);
+  logActivity({ decision: "skip", reason: summary });
 }
 
 export function startPrimerSaltoRunner(): void {

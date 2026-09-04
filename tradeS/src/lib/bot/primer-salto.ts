@@ -334,6 +334,47 @@ export function toCents(price: number): number {
   return Number(price.toFixed(2));
 }
 
+export interface ScanTally {
+  /** Symbols in the universe the scan set out to read. */
+  universe: number;
+  /** Of those, how many returned bars. */
+  scanned: number;
+  fetchFailures: number;
+  bought: number;
+  openCount: number;
+  maxConcurrent: number;
+}
+
+/**
+ * One line summarising a completed scan, written to the activity feed even
+ * when nothing was bought.
+ *
+ * A strategy that averages 2.4 entries a month is silent on roughly 19 of
+ * every 20 trading days, and silence from a scheduled job is ambiguous in
+ * the worst way: "it ran and found nothing" and "it never woke up" look
+ * identical from the outside. Only the acting paths used to reach the
+ * database, so a quiet week left no evidence either way and the honest
+ * answer to "is this working?" was a shrug. A daily heartbeat costs one row
+ * and turns that shrug into a fact.
+ *
+ * The fetch count is part of it deliberately: 69 symbols scanned and 69
+ * failures is also "no signals today", and those two must never read the
+ * same.
+ */
+export function scanSummary(tally: ScanTally): string {
+  const attempted = tally.scanned + tally.fetchFailures;
+  const parts = [
+    `scan done — ${tally.scanned} of ${tally.universe} symbol(s) read`,
+    `${tally.bought} new position(s)`,
+    `${tally.openCount}/${tally.maxConcurrent} slots used`,
+  ];
+  if (tally.fetchFailures > 0) parts.push(`${tally.fetchFailures} fetch failure(s)`);
+  // Stopping early is not a fault, but it does mean the rest of the universe
+  // went unexamined — which changes what "no signals" is evidence of.
+  if (attempted < tally.universe) parts.push("stopped early: all slots full");
+  return parts.join(", ");
+}
+
 /**
  * The order to scan symbols in on a given day.
  *

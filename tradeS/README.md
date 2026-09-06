@@ -50,6 +50,14 @@ fix it.
 Claude Code login; that env var silently switches the SDK to per-token API
 billing. `guardAnthropicKey()` deletes it at worker boot.
 
+Want the bot's buys, sells and halts on your phone? Set `NTFY_TOPIC` in
+`.env.local` and subscribe to the same topic in the [ntfy](https://ntfy.sh)
+app. Unset, notifications stay as a banner in the worker's terminal. The
+topic name is the only credential ntfy has, so choose one nobody would
+guess. The daily "scanned, bought nothing" heartbeat is deliberately *not*
+pushed — a channel that pings every day gets muted, and a muted channel
+loses the halt too.
+
 ## Scripts
 
 | Command | What it does |

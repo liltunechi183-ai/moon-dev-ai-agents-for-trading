@@ -21,6 +21,8 @@ const rawSchema = z.object({
   ALPACA_ALLOW_LIVE: emptyToUndef,
   ALPACA_LIVE_KEY_ID: emptyToUndef,
   ALPACA_LIVE_SECRET_KEY: emptyToUndef,
+  NTFY_TOPIC: emptyToUndef,
+  NTFY_SERVER: emptyToUndef,
 });
 
 const raw = rawSchema.parse(process.env);
@@ -49,6 +51,12 @@ export const env = {
   authSecret: raw.AUTH_SECRET,
   quiverApiKey: raw.QUIVER_API_KEY,
   allowLive: raw.ALPACA_ALLOW_LIVE === "true",
+
+  // Push notifications. The topic is the whole secret on ntfy — anyone who
+  // knows the name can read the messages and publish to it — so it lives in
+  // .env.local with the keys and is never logged.
+  ntfyTopic: raw.NTFY_TOPIC,
+  ntfyServer: (raw.NTFY_SERVER || "https://ntfy.sh").replace(/\/+$/, ""),
 
   tradingBaseUrl: paper
     ? "https://paper-api.alpaca.markets"

@@ -1,12 +1,19 @@
 /**
- * Zero-config terminal notifications for the bot: a visible banner (color +
- * bell) printed in the worker's console output whenever the bot buys,
- * sells, or halts. No external service, no credentials — just impossible
- * to miss if you're watching the terminal where `npm run worker` runs.
+ * Notifications for the bot: a visible banner (color + bell) in the worker's
+ * console whenever it buys, sells, or halts, and — when NTFY_TOPIC is set —
+ * the same event pushed to a phone.
+ *
+ * The terminal half needs no configuration and never fails. The push half is
+ * optional and fire-and-forget on purpose: this is called from inside the
+ * entry loop, and a notification service having a bad afternoon must never
+ * be able to interrupt trading. A failed push is reported to the console and
+ * otherwise ignored.
  *
  * formatNotification() is pure and tested; notify() is the thin side-effect
- * (console + bell character) that the bot engine calls.
+ * that the bot engine calls.
  */
+import { env } from "@/lib/env";
+import { buildNtfyRequest } from "./ntfy";
 
 export type NotifyKind = "buy" | "sell" | "halt";
 
@@ -51,8 +58,33 @@ export function formatNotificationBanner(event: NotifyEvent): string {
 
 /** Print the banner to the console and ring the terminal bell — every buy,
  * sell, and halt gets one, so the console never silently scrolls past a
- * real trade. */
+ * real trade. Also pushes to ntfy when a topic is configured. */
 export function notify(event: NotifyEvent): void {
   console.log(formatNotificationBanner(event));
   process.stdout.write(BELL);
+  void pushToNtfy(event);
+}
+
+async function pushToNtfy(event: NotifyEvent): Promise<void> {
+  const request = buildNtfyRequest(
+    event,
+    env.ntfyTopic ? { server: env.ntfyServer, topic: env.ntfyTopic } : null,
+  );
+  if (!request) return;
+
+  try {
+    // A hung request must not keep a handle open for the rest of the day.
+    const response = await fetch(request.url, {
+      method: "POST",
+      headers: request.headers,
+      body: request.body,
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!response.ok) {
+      console.error(`[notify] ntfy returned ${response.status} — the terminal banner still stands`);
+    }
+  } catch (err) {
+    // Never rethrow: this runs inside the entry loop.
+    console.error("[notify] ntfy push failed — the terminal banner still stands:", err);
+  }
 }

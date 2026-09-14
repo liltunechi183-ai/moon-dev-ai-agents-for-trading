@@ -1,7 +1,16 @@
 import cron from "node-cron";
 import { desc, eq } from "drizzle-orm";
 import { db, tables } from "@/lib/db";
-import { claimNextJob, completeJob, enqueueJob, failJob, requeueStaleJobs, type JobRow } from "@/lib/jobs";
+import {
+  claimNextJob,
+  completeJob,
+  enqueueJob,
+  failJob,
+  releaseJob,
+  requeueStaleJobs,
+  type JobRow,
+} from "@/lib/jobs";
+import { cooldownFrom, isUsageLimit } from "@/lib/research/usage-limit";
 import { getTrackedSymbols } from "@/lib/tracked";
 import { seedStrategies } from "@/lib/research/strategy";
 import { research } from "@/lib/research/agent";
@@ -121,16 +130,34 @@ async function handlePostmortem(job: JobRow): Promise<void> {
   completeJob(job.id, { skipped: "bad postmortem payload" });
 }
 
+/** While the account is rate-limited, no job may be claimed: claiming one
+ * only to refuse it is how a whole queue gets destroyed in minutes. */
+let pausedUntil = 0;
+
 async function pollOnce(): Promise<void> {
   if (busy) return;
+  if (Date.now() < pausedUntil) return;
+
   const job = claimNextJob(PRIORITY.filter((t) => HANDLED.has(t)));
   if (!job) return;
   busy = true;
   try {
     await handleJob(job);
   } catch (err) {
-    console.error(`[research-runner] job ${job.id} failed:`, err);
-    failJob(job.id, err);
+    if (isUsageLimit(err)) {
+      // The job is untouched work, not a failure. Put it back and stand
+      // down — every job behind it would meet the same wall.
+      releaseJob(job.id);
+      pausedUntil = Date.now() + cooldownFrom(err);
+      const resumesAt = new Date(pausedUntil).toLocaleTimeString();
+      console.warn(
+        `[research-runner] account limit reached — AI research paused until ${resumesAt}. ` +
+          `Job ${job.id} is back in the queue. Primer Salto and the price feeds are unaffected.`,
+      );
+    } else {
+      console.error(`[research-runner] job ${job.id} failed:`, err);
+      failJob(job.id, err);
+    }
   } finally {
     busy = false;
   }

@@ -81,6 +81,20 @@ export function completeJob(id: number, result: unknown): void {
     .run();
 }
 
+/**
+ * Put a claimed job back in the queue, untouched.
+ *
+ * For work that never actually ran — the account was rate-limited, the
+ * machine is shutting down. Marking such a job `error` records a failure
+ * that never happened and loses the work for a reason unrelated to it.
+ */
+export function releaseJob(id: number): void {
+  db.update(tables.jobs)
+    .set({ status: "queued", startedAt: null })
+    .where(eq(tables.jobs.id, id))
+    .run();
+}
+
 export function failJob(id: number, error: unknown): void {
   db.update(tables.jobs)
     .set({ status: "error", error: String(error), finishedAt: Date.now() })

@@ -8,6 +8,14 @@ import { BotStatsPanel, type RuleStatsDto, type BotTradeDto } from "@/components
 import { BotSuggestionsPanel, type SuggestionDto } from "@/components/BotSuggestionsPanel";
 import { useI18n } from "@/lib/i18n/provider";
 
+/** Fetch JSON, treating a non-2xx as the failure it is — `res.json()` on an
+ * error page either throws or, worse, succeeds with something meaningless. */
+async function getJson<T>(url: string): Promise<T> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`${url} responded ${res.status}`);
+  return (await res.json()) as T;
+}
+
 interface ConfigResponse {
   config: BotConfigDto;
   liveAckValid: boolean;
@@ -25,21 +33,47 @@ export default function BotPage() {
   const [suggestions, setSuggestions] = useState<SuggestionDto[]>([]);
   const [killResult, setKillResult] = useState<string | null>(null);
   const [killing, setKilling] = useState(false);
+  /**
+   * Whether this page is currently in touch with the worker's database.
+   *
+   * This distinction is not cosmetic. Every panel below reads from state
+   * that starts empty, and an empty state here is indistinguishable from a
+   * true one: no config renders the badge as STOPPED, no rules renders "no
+   * rules yet", no activity renders "no activity yet". A page that cannot
+   * reach the server therefore used to render a complete, confident, and
+   * entirely false picture of a halted bot — which is the one lie this
+   * page must never tell about a system that handles money.
+   */
+  const [contact, setContact] = useState<"loading" | "ok" | "lost">("loading");
 
   const refresh = useCallback(async () => {
-    const [cfg, r, act, stats, sug] = await Promise.all([
-      fetch("/api/bot/config").then((res) => res.json()),
-      fetch("/api/bot/rules").then((res) => res.json()),
-      fetch("/api/bot/activity").then((res) => res.json()),
-      fetch("/api/bot/stats").then((res) => res.json()),
-      fetch("/api/bot/suggestions").then((res) => res.json()),
+    // allSettled, not all: one endpoint erroring must not blank the other
+    // four. A stats query that fails is a missing panel, not a stopped bot.
+    const [cfg, r, act, stats, sug] = await Promise.allSettled([
+      getJson<ConfigResponse>("/api/bot/config"),
+      getJson<BotRuleDto[]>("/api/bot/rules"),
+      getJson<BotActivityDto[]>("/api/bot/activity"),
+      getJson<{ ruleStats?: RuleStatsDto[]; recentTrades?: BotTradeDto[] }>("/api/bot/stats"),
+      getJson<SuggestionDto[]>("/api/bot/suggestions"),
     ]);
-    setConfigRes(cfg);
-    setRules(Array.isArray(r) ? r : []);
-    setActivity(Array.isArray(act) ? act : []);
-    setRuleStats(stats.ruleStats ?? []);
-    setRecentTrades(stats.recentTrades ?? []);
-    setSuggestions(Array.isArray(sug) ? sug : []);
+
+    if (cfg.status === "fulfilled") setConfigRes(cfg.value);
+    if (r.status === "fulfilled") setRules(Array.isArray(r.value) ? r.value : []);
+    if (act.status === "fulfilled") setActivity(Array.isArray(act.value) ? act.value : []);
+    if (stats.status === "fulfilled") {
+      setRuleStats(stats.value.ruleStats ?? []);
+      setRecentTrades(stats.value.recentTrades ?? []);
+    }
+    if (sug.status === "fulfilled") setSuggestions(Array.isArray(sug.value) ? sug.value : []);
+
+    // The config call is the one that decides whether the header may claim
+    // anything at all about the bot's state.
+    if (cfg.status === "rejected") {
+      console.error("[bot page] could not reach the server:", cfg.reason);
+      setContact("lost");
+    } else {
+      setContact("ok");
+    }
   }, []);
 
   useEffect(() => {
@@ -72,12 +106,20 @@ export default function BotPage() {
         <h1 className="text-lg font-semibold text-zinc-100">{t("bot.title")}</h1>
         <span
           className={`rounded-full border px-3 py-1 text-xs font-semibold ${
-            enabled
-              ? "border-[#22c55e]/40 bg-[#22c55e]/10 text-[#22c55e]"
-              : "border-white/15 bg-white/[0.04] text-zinc-400"
+            contact !== "ok"
+              ? "border-amber-500/40 bg-amber-500/10 text-amber-400"
+              : enabled
+                ? "border-[#22c55e]/40 bg-[#22c55e]/10 text-[#22c55e]"
+                : "border-white/15 bg-white/[0.04] text-zinc-400"
           }`}
         >
-          {enabled ? t("bot.running") : t("bot.stopped")}
+          {contact === "loading"
+            ? t("bot.checking")
+            : contact === "lost"
+              ? t("bot.noContact")
+              : enabled
+                ? t("bot.running")
+                : t("bot.stopped")}
         </span>
         <button
           onClick={kill}
@@ -89,6 +131,13 @@ export default function BotPage() {
       </div>
 
       {killResult && <p className="text-xs text-amber-500">{killResult}</p>}
+
+      {contact === "lost" && (
+        <div className="rounded-lg border-2 border-amber-500/60 bg-amber-500/10 p-3 text-xs text-amber-200">
+          <strong className="font-semibold">{t("bot.noContactTitle")}</strong>{" "}
+          {t("bot.noContactBody")}
+        </div>
+      )}
 
       <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-zinc-400">
         {t("bot.safetyBanner")}

@@ -13,6 +13,9 @@ import {
   pctOffHigh,
   toCents,
   scanSummary,
+  etMinutesOfDay,
+  shouldCatchUp,
+  SCAN_MINUTE_ET,
 } from "@/lib/bot/primer-salto";
 import { computeSignals, DEFAULT_PARAMS } from "@/lib/study/primer-salto";
 import type { Bar } from "@/lib/quant/types";
@@ -439,5 +442,56 @@ describe("scanSummary", () => {
     const line = scanSummary({ ...tally, scanned: 60, fetchFailures: 9 });
     expect(line).toContain("9 fetch failure(s)");
     expect(line).not.toContain("stopped early");
+  });
+});
+
+describe("etMinutesOfDay", () => {
+  it("reads the New York clock, not this machine's", () => {
+    // 19:50 UTC is 15:50 in New York during daylight time — the exact
+    // minute the strategy acts on.
+    expect(etMinutesOfDay(Date.UTC(2026, 8, 15, 19, 50))).toBe(15 * 60 + 50);
+  });
+
+  it("follows the daylight-saving shift rather than a fixed offset", () => {
+    // Same UTC hour, January: New York is one hour further back.
+    expect(etMinutesOfDay(Date.UTC(2026, 0, 15, 19, 50))).toBe(14 * 60 + 50);
+  });
+
+  it("renders midnight as zero, not as 1440", () => {
+    expect(etMinutesOfDay(Date.UTC(2026, 8, 15, 4, 0))).toBe(0);
+  });
+});
+
+describe("shouldCatchUp", () => {
+  const due = { nowMinutesEt: SCAN_MINUTE_ET + 4, handledToday: false, marketOpen: true };
+
+  it("runs when the appointment passed and no scan was recorded", () => {
+    // 15 September: the worker was up all day and node-cron logged
+    // "missed execution at 15:50:00". Nothing re-ran it, and the session
+    // was lost.
+    expect(shouldCatchUp(due)).toBe(true);
+  });
+
+  it("does nothing once the scan is on record", () => {
+    expect(shouldCatchUp({ ...due, handledToday: true })).toBe(false);
+  });
+
+  it("never runs early — that would be a different strategy", () => {
+    expect(shouldCatchUp({ ...due, nowMinutesEt: SCAN_MINUTE_ET - 1 })).toBe(false);
+    // Exactly on the minute is due, not early.
+    expect(shouldCatchUp({ ...due, nowMinutesEt: SCAN_MINUTE_ET })).toBe(true);
+  });
+
+  it("never runs after the close", () => {
+    // A fill hours later is not the trade the backtest measured. A missed
+    // session is reported as missed, not approximated.
+    expect(shouldCatchUp({ ...due, marketOpen: false })).toBe(false);
+    expect(shouldCatchUp({ ...due, nowMinutesEt: 20 * 60, marketOpen: false })).toBe(false);
+  });
+
+  it("stays quiet all morning, so the check costs nothing until it is due", () => {
+    for (const minute of [0, 6 * 60, 9 * 60 + 30, 12 * 60, SCAN_MINUTE_ET - 1]) {
+      expect(shouldCatchUp({ ...due, nowMinutesEt: minute }), `minute ${minute}`).toBe(false);
+    }
   });
 });

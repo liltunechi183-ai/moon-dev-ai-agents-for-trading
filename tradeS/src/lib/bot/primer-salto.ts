@@ -334,6 +334,59 @@ export function toCents(price: number): number {
   return Number(price.toFixed(2));
 }
 
+/** Minutes since midnight in New York — the clock the strategy lives by. */
+export function etMinutesOfDay(ts: number): number {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "America/New_York",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date(ts));
+  const hour = Number(parts.find((p) => p.type === "hour")?.value ?? "0");
+  const minute = Number(parts.find((p) => p.type === "minute")?.value ?? "0");
+  // Some runtimes render midnight as hour 24 rather than 0.
+  return (hour % 24) * 60 + minute;
+}
+
+/** 15:50 New York, as minutes since midnight. */
+export const SCAN_MINUTE_ET = 15 * 60 + 50;
+
+export interface CatchUpInput {
+  nowMinutesEt: number;
+  /** A scan — or a market-closed note — already recorded for today. */
+  handledToday: boolean;
+  marketOpen: boolean;
+  scanMinuteEt?: number;
+}
+
+/**
+ * Whether the daily scan still needs running, having not run on time.
+ *
+ * A single cron firing is a single point of failure, and this one guards the
+ * only job in the system that places orders. node-cron does not run a missed
+ * execution late — it logs that it was missed and moves on — so anything that
+ * blocks the event loop for a moment at 15:50, or a laptop suspended across
+ * that minute, silently costs the whole session. That is precisely what
+ * happened on 15 September: the worker was up all day, and the log says
+ * "missed execution at 15:50:00".
+ *
+ * So the cron becomes the usual path rather than the only one, and a cheap
+ * check asks once a minute whether the appointment was actually kept.
+ *
+ * Two conditions keep the catch-up honest rather than merely eager. It never
+ * runs before the scheduled minute, because entering early is a different
+ * strategy from the one that was measured. And it never runs with the market
+ * closed, because a fill after the close is not the trade the backtest
+ * modelled — a session missed outright is reported as missed, not
+ * approximated hours later.
+ */
+export function shouldCatchUp(input: CatchUpInput): boolean {
+  const scheduled = input.scanMinuteEt ?? SCAN_MINUTE_ET;
+  if (input.handledToday) return false;
+  if (!input.marketOpen) return false;
+  return input.nowMinutesEt >= scheduled;
+}
+
 export interface ScanTally {
   /** Symbols in the universe the scan set out to read. */
   universe: number;

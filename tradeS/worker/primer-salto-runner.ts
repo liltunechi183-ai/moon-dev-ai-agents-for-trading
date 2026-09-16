@@ -43,6 +43,9 @@ import {
   marketContext,
   scanOrder,
   scanSummary,
+  shouldCatchUp,
+  etMinutesOfDay,
+  SCAN_MINUTE_ET,
   tradingDate,
   toCents,
 } from "@/lib/bot/primer-salto";
@@ -110,6 +113,30 @@ function logActivity(entry: {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+/**
+ * Has today's appointment already been kept — either scanned, or noted as a
+ * closed market?
+ *
+ * Both count as handled. Without the second, a catch-up loop would call the
+ * tick every minute after the close and write a "market closed" row each
+ * time.
+ */
+function handledToday(): boolean {
+  const today = tradingDate(Date.now());
+  const since = Date.now() - 36 * 3_600_000;
+  return db
+    .select({ ts: tables.botActivity.ts, reason: tables.botActivity.reason })
+    .from(tables.botActivity)
+    .where(gte(tables.botActivity.ts, since))
+    .all()
+    .some(
+      (row) =>
+        tradingDate(row.ts) === today &&
+        (row.reason?.startsWith("[primer-salto] scan done") === true ||
+          row.reason?.startsWith("[primer-salto] market closed") === true),
+    );
 }
 
 export async function runPrimerSaltoTick(): Promise<void> {
@@ -349,6 +376,30 @@ export async function reportMissedSessions(lookbackDays = 21): Promise<void> {
   logActivity({ decision: "skip", reason: message });
 }
 
+/**
+ * The safety net under the cron.
+ *
+ * Checked every minute, cheap: one indexed read, and a clock comparison
+ * before anything touches the network. It only reaches Alpaca once the
+ * scheduled minute has passed and today still has no scan on record.
+ */
+async function catchUpIfMissed(): Promise<void> {
+  const config = getBotConfig();
+  if (!config.primerSaltoEnabled || !env.hasAlpacaKeys) return;
+
+  const now = Date.now();
+  if (etMinutesOfDay(now) < SCAN_MINUTE_ET) return;
+  if (handledToday()) return;
+
+  const clock = await alpaca.getClock();
+  if (!shouldCatchUp({ nowMinutesEt: etMinutesOfDay(now), handledToday: false, marketOpen: clock.is_open })) {
+    return;
+  }
+
+  console.warn("[primer-salto] the 15:50 run did not happen — catching up now, before the close");
+  await runPrimerSaltoTick();
+}
+
 export function startPrimerSaltoRunner(): void {
   // After boot settles, so a restart does not race the database or the
   // network. A missed session is not urgent to the minute; being told at all
@@ -368,4 +419,11 @@ export function startPrimerSaltoRunner(): void {
     },
     { timezone: "America/New_York" },
   );
+
+  // And the net beneath it. node-cron does not re-run a missed execution, so
+  // the cron alone makes the only order-placing job in the system depend on
+  // one instant going well.
+  setInterval(() => {
+    catchUpIfMissed().catch((err) => console.error("[primer-salto] catch-up failed:", err));
+  }, 60_000);
 }

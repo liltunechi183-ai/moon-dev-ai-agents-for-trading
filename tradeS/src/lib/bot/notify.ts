@@ -15,7 +15,7 @@
 import { env } from "@/lib/env";
 import { buildNtfyRequest } from "./ntfy";
 
-export type NotifyKind = "buy" | "sell" | "halt";
+export type NotifyKind = "buy" | "sell" | "halt" | "warn";
 
 export interface NotifyEvent {
   kind: NotifyKind;
@@ -28,12 +28,14 @@ const RESET = "\x1b[0m";
 const BOLD = "\x1b[1m";
 const GREEN = "\x1b[32m";
 const RED = "\x1b[31m";
+const AMBER = "\x1b[33m";
 const BELL = "\x07";
 
 const STYLE: Record<NotifyKind, { color: string; label: string; emoji: string }> = {
   buy: { color: GREEN, label: "BOT BOUGHT", emoji: "🟢" },
   sell: { color: GREEN, label: "BOT SOLD", emoji: "🔵" },
   halt: { color: RED, label: "BOT HALTED", emoji: "🛑" },
+  warn: { color: AMBER, label: "HEADS UP", emoji: "⚠️" },
 };
 
 /** Pure: builds the banner text (no ANSI, no bell) — easy to assert on. */

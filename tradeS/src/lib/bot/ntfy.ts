@@ -34,6 +34,9 @@ const DELIVERY: Record<NotifyKind, { tags: string; priority: string; verb: strin
   buy: { tags: "green_circle,chart_with_upwards_trend", priority: "4", verb: "BOUGHT" },
   sell: { tags: "blue_circle,heavy_dollar_sign", priority: "4", verb: "SOLD" },
   halt: { tags: "rotating_light,octagonal_sign", priority: "5", verb: "HALTED" },
+  // Deliberately below a fill: this reports something that did NOT happen,
+  // and it must never out-shout an order the account actually placed.
+  warn: { tags: "warning", priority: "3", verb: "HEADS UP" },
 };
 
 /**

@@ -23,7 +23,7 @@
  *    but the human version of this strategy has a filter this one lacks.
  */
 import cron from "node-cron";
-import { and, eq } from "drizzle-orm";
+import { and, eq, gte } from "drizzle-orm";
 import { db, tables } from "@/lib/db";
 import { env } from "@/lib/env";
 import { alpaca } from "@/lib/alpaca/client";
@@ -47,6 +47,7 @@ import {
   toCents,
 } from "@/lib/bot/primer-salto";
 import { DEFAULT_PARAMS } from "@/lib/study/primer-salto";
+import { missedSessions, missedSessionsMessage } from "@/lib/bot/missed-sessions";
 
 /** Enough for the 40-period mean, the trend window, AND the 52-week high
  * recorded as context on every entry. */
@@ -301,7 +302,63 @@ export async function runPrimerSaltoTick(): Promise<void> {
   logActivity({ decision: "skip", reason: summary });
 }
 
+/** The heartbeat rows, as trading dates. */
+function scannedDates(sinceTs: number): string[] {
+  const rows = db
+    .select({ ts: tables.botActivity.ts, reason: tables.botActivity.reason })
+    .from(tables.botActivity)
+    .where(gte(tables.botActivity.ts, sinceTs))
+    .all();
+  return rows
+    .filter((r) => r.reason?.startsWith("[primer-salto] scan done"))
+    .map((r) => tradingDate(r.ts));
+}
+
+/**
+ * Report sessions that went by without a scan.
+ *
+ * Run at boot rather than on a schedule, because the machine being up is
+ * exactly the condition under which the owner can be told. A laptop that
+ * slept through Tuesday cannot report Tuesday until it wakes.
+ */
+export async function reportMissedSessions(lookbackDays = 21): Promise<void> {
+  const config = getBotConfig();
+  if (!config.primerSaltoEnabled || !env.hasAlpacaKeys) return;
+
+  const today = tradingDate(Date.now());
+  const sinceTs = Date.now() - lookbackDays * 86_400_000;
+  const start = tradingDate(sinceTs);
+
+  const calendar = await alpaca.getCalendar(start, today);
+  const report = missedSessions(
+    calendar.map((d) => d.date),
+    scannedDates(sinceTs),
+    today,
+  );
+
+  const message = missedSessionsMessage(report);
+  if (!message) {
+    console.log(
+      `[primer-salto] no gaps — ${report.checked} session(s) checked, last scan ${report.lastScan ?? "none yet"}`,
+    );
+    return;
+  }
+
+  console.warn(`[primer-salto] ${message}`);
+  notify({ kind: "warn", reason: `Primer Salto — ${message}` });
+  logActivity({ decision: "skip", reason: message });
+}
+
 export function startPrimerSaltoRunner(): void {
+  // After boot settles, so a restart does not race the database or the
+  // network. A missed session is not urgent to the minute; being told at all
+  // is the whole point.
+  setTimeout(() => {
+    reportMissedSessions().catch((err) =>
+      console.error("[primer-salto] missed-session check failed:", err),
+    );
+  }, 30_000);
+
   // 15:50 New York: the strategy's "5 minutes before the close" rule, with a
   // few minutes' margin for 69 symbols' worth of fetching.
   cron.schedule(

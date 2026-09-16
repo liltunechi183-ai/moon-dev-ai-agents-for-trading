@@ -82,6 +82,19 @@ export const alpaca = {
   getClock: () => trading<AlpacaClock>("/v2/clock"),
   getAccount: () => trading<AlpacaAccount>("/v2/account"),
 
+  /**
+   * The exchange's own list of session dates between two YYYY-MM-DD bounds.
+   *
+   * Worth a network call rather than counting weekdays: a holiday counted as
+   * a missed session is a false alarm, and an alert that cries wolf about
+   * Labor Day is one the owner learns to ignore — taking the real misses
+   * down with it.
+   */
+  getCalendar: (start: string, end: string) =>
+    trading<Array<{ date: string; open: string; close: string }>>(
+      `/v2/calendar?start=${start}&end=${end}`,
+    ),
+
   getPositions: () => trading<unknown[]>("/v2/positions"),
   /** cancelOrders=true also cancels open orders (bracket legs) on the symbol. */
   closePosition: (symbol: string, cancelOrders = false) =>

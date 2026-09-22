@@ -396,7 +396,17 @@ export interface ScanTally {
   bought: number;
   openCount: number;
   maxConcurrent: number;
+  /** How many symbols each skip reason accounted for. */
+  skips?: Partial<Record<SkipReason, number>>;
 }
+
+/** Plain-language names for the reasons, in the order worth reading them. */
+const SKIP_LABEL: Array<[SkipReason, string]> = [
+  ["too-small", "signal(s) too small for the risk budget"],
+  ["position-cap", "signal(s) with no free slot"],
+  ["already-holding", "signal(s) in a symbol already held"],
+  ["not-enough-history", "symbol(s) short of history"],
+];
 
 /**
  * One line summarising a completed scan, written to the activity feed even
@@ -413,20 +423,43 @@ export interface ScanTally {
  * The fetch count is part of it deliberately: 69 symbols scanned and 69
  * failures is also "no signals today", and those two must never read the
  * same.
+ *
+ * Nor must "the checklist matched nothing" and "the checklist matched, and
+ * every match was then rejected". The second is a configuration problem
+ * wearing the costume of a quiet market — a $24 risk budget buys no whole
+ * share of an expensive stock, and a Primer Salto signal is a wide bar by
+ * construction, so the widest and most volatile candidates are exactly the
+ * ones priced out. Reporting only "0 new positions" hides that completely,
+ * so the reasons are counted and named.
  */
 export function scanSummary(tally: ScanTally): string {
   const attempted = tally.scanned + tally.fetchFailures;
+  const skips = tally.skips ?? {};
+  const signals =
+    (skips["too-small"] ?? 0) +
+    (skips["position-cap"] ?? 0) +
+    (skips["already-holding"] ?? 0) +
+    tally.bought;
+
   const parts = [
     `scan done — ${tally.scanned} of ${tally.universe} symbol(s) read`,
+    `${signals} signal(s)`,
     `${tally.bought} new position(s)`,
     `${tally.openCount}/${tally.maxConcurrent} slots used`,
   ];
+
+  for (const [reason, label] of SKIP_LABEL) {
+    const count = skips[reason] ?? 0;
+    if (count > 0) parts.push(`${count} ${label}`);
+  }
+
   if (tally.fetchFailures > 0) parts.push(`${tally.fetchFailures} fetch failure(s)`);
   // Stopping early is not a fault, but it does mean the rest of the universe
   // went unexamined — which changes what "no signals" is evidence of.
   if (attempted < tally.universe) parts.push("stopped early: all slots full");
   return parts.join(", ");
 }
+
 
 /**
  * The order to scan symbols in on a given day.

@@ -43,6 +43,7 @@ import {
   marketContext,
   scanOrder,
   scanSummary,
+  type SkipReason,
   shouldCatchUp,
   etMinutesOfDay,
   SCAN_MINUTE_ET,
@@ -205,6 +206,9 @@ export async function runPrimerSaltoTick(): Promise<void> {
   let bought = 0;
   let scanned = 0;
   let fetchFailures = 0;
+  /** Why each skipped symbol was skipped — the question "0 new positions"
+   * on its own can never answer. */
+  const skips: Partial<Record<SkipReason, number>> = {};
 
   // Shuffled per day, not walked in list order: see scanOrder(). On a
   // cluster day the slots would otherwise always go to the front of the
@@ -227,7 +231,21 @@ export async function runPrimerSaltoTick(): Promise<void> {
         maxPositionUsd: Math.min(config.maxPositionUsd, notionalUsd),
         params: DEFAULT_PARAMS,
       });
-      if (decision.act === "skip") continue;
+      if (decision.act === "skip") {
+        skips[decision.why] = (skips[decision.why] ?? 0) + 1;
+        // A checklist that matched and was then turned away is the one kind
+        // of skip worth a row of its own. It is rare — only a real signal
+        // gets this far — and it is the difference between a quiet market
+        // and an account too small to act on what it found.
+        if (decision.why === "too-small" || decision.why === "position-cap") {
+          logActivity({
+            symbol,
+            decision: "blocked",
+            reason: `signal not taken (${decision.why}) — ${decision.detail}`,
+          });
+        }
+        continue;
+      }
 
       const { plan, shares, sizing } = decision;
       const orderNotionalUsd = sizing.notionalUsd;
@@ -324,6 +342,7 @@ export async function runPrimerSaltoTick(): Promise<void> {
     bought,
     openCount,
     maxConcurrent,
+    skips,
   });
   console.log(`[primer-salto] ${summary}`);
   logActivity({ decision: "skip", reason: summary });

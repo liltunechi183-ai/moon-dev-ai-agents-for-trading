@@ -422,6 +422,41 @@ describe("scanSummary", () => {
     expect(line).not.toContain("stopped early");
   });
 
+  it("distinguishes a quiet market from an account that cannot act", () => {
+    // The question a week of silence raises: was there nothing to buy, or
+    // was there something we could not afford? "0 new positions" answers
+    // neither, and a $24 risk budget rejects whole shares of a pricey stock
+    // — on exactly the wide, volatile bars this strategy looks for.
+    const quiet = scanSummary(tally);
+    const pricedOut = scanSummary({ ...tally, skips: { "too-small": 4 } });
+
+    expect(quiet).toContain("0 signal(s)");
+    expect(pricedOut).toContain("4 signal(s)");
+    expect(pricedOut).toContain("4 signal(s) too small for the risk budget");
+    expect(pricedOut).not.toEqual(quiet);
+  });
+
+  it("counts a signal as found whether it was bought or turned away", () => {
+    const line = scanSummary({
+      ...tally,
+      bought: 1,
+      openCount: 1,
+      skips: { "too-small": 2, "position-cap": 1 },
+    });
+    expect(line).toContain("4 signal(s)");
+    expect(line).toContain("1 new position(s)");
+    expect(line).toContain("2 signal(s) too small for the risk budget");
+    expect(line).toContain("1 signal(s) with no free slot");
+  });
+
+  it("does not count a symbol with no signal as a signal", () => {
+    // no-signal is the overwhelmingly common case and must not inflate the
+    // count, or every day would look like a day full of missed chances.
+    const line = scanSummary({ ...tally, skips: { "no-signal": 69 } });
+    expect(line).toContain("0 signal(s)");
+    expect(line).not.toContain("69 signal(s)");
+  });
+
   it("distinguishes a quiet day from a data outage", () => {
     const quiet = scanSummary(tally);
     const outage = scanSummary({ ...tally, scanned: 0, fetchFailures: 69 });

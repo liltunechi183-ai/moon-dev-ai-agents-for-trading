@@ -391,8 +391,30 @@ export async function reportMissedSessions(lookbackDays = 21): Promise<void> {
   }
 
   console.warn(`[primer-salto] ${message}`);
+
+  // Tell the owner once per distinct set of gaps, not once per restart.
+  // A gap stays inside the 21-day window for three weeks, and this runs at
+  // every boot — so the same old Tuesday would push the same alert over and
+  // over. Repetition is how a channel that also carries fills and halts
+  // gets muted, which would cost far more than the gap it was reporting.
+  if (alreadyReported(message, lookbackDays)) {
+    console.log("[primer-salto] (already reported — not notifying again)");
+    return;
+  }
+
   notify({ kind: "warn", reason: `Primer Salto — ${message}` });
   logActivity({ decision: "skip", reason: message });
+}
+
+/** Has this exact set of gaps already been written to the activity feed? */
+function alreadyReported(message: string, lookbackDays: number): boolean {
+  const since = Date.now() - lookbackDays * 86_400_000;
+  return db
+    .select({ reason: tables.botActivity.reason })
+    .from(tables.botActivity)
+    .where(gte(tables.botActivity.ts, since))
+    .all()
+    .some((row) => row.reason === `[primer-salto] ${message}`);
 }
 
 /**
